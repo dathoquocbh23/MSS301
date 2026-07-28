@@ -11,14 +11,14 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface MasterRepository extends JpaRepository<Master, Long> {
 
-    boolean existsByCode(String code);
+    boolean existsByName(String name);
 
-    boolean existsByCodeAndMasterIdNot(String code, Long masterId);
+    boolean existsByNameAndMasterIdNot(String name, Long masterId);
 
     @Query("SELECT m FROM Master m WHERE "
             + "(:name IS NULL OR LOWER(m.name) LIKE LOWER(CONCAT('%', :name, '%'))) AND "
-            + "(:status IS NULL OR m.status = :status)")
+            + "(:ownerName IS NULL OR LOWER(m.owner) LIKE LOWER(CONCAT('%', :ownerName, '%')))")
     Page<Master> search(@Param("name") String name,
-                        @Param("status") String status,
+                        @Param("ownerName") String ownerName,
                         Pageable pageable);
 }

@@ -1,23 +1,20 @@
 package fu.se193114.master.common;
 
 import fu.se193114.master.dto.ApiResponseDTO;
-import jakarta.validation.ConstraintViolation;
-import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Bang ma loi THEO DE (PE1: 1=success, 2=validation, 3=duplicate, 4=not found, 0=internal).
- * HTTP code cung theo de — PE hay dung 400 cho ca not-found (khong phai 404)!
- */
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -29,8 +26,8 @@ public class GlobalExceptionHandler {
                 .body(ApiResponseDTO.of(4, ex.getMessage(), null));
     }
 
-    @ExceptionHandler(DuplicateCodeException.class)
-    public ResponseEntity<ApiResponseDTO> handleDuplicateCode(DuplicateCodeException ex) {
+    @ExceptionHandler(DuplicateNameException.class)
+    public ResponseEntity<ApiResponseDTO> handleDuplicateName(DuplicateNameException ex) {
         log.warn(ex.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponseDTO.of(3, ex.getMessage(), null));
@@ -49,22 +46,31 @@ public class GlobalExceptionHandler {
         for (FieldError fieldError : ex.getBindingResult().getFieldErrors()) {
             messages.add(fieldError.getDefaultMessage());
         }
-        String message = messages.isEmpty() ? "Validation failed" : String.join("; ", messages);
+        String message = messages.isEmpty() ? "Data validation failed" : String.join("; ", messages);
         log.warn(message);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponseDTO.of(2, message, null));
     }
 
-    @ExceptionHandler(ConstraintViolationException.class)
-    public ResponseEntity<ApiResponseDTO> handleConstraintViolation(ConstraintViolationException ex) {
-        List<String> messages = new ArrayList<>();
-        for (ConstraintViolation<?> violation : ex.getConstraintViolations()) {
-            messages.add(violation.getMessage());
-        }
-        String message = messages.isEmpty() ? "Validation failed" : String.join("; ", messages);
-        log.warn(message);
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiResponseDTO> handleNotReadable(HttpMessageNotReadableException ex) {
+        log.warn("Malformed request body: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ApiResponseDTO.of(2, message, null));
+                .body(ApiResponseDTO.of(2, "Data validation failed", null));
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponseDTO> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        log.warn("Type mismatch on parameter: {}", ex.getName());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponseDTO.of(2, "Data validation failed", null));
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiResponseDTO> handleDataIntegrity(DataIntegrityViolationException ex) {
+        log.warn("Database constraint violated: {}", ex.getMostSpecificCause().getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponseDTO.of(2, "Data validation failed", null));
     }
 
     @ExceptionHandler(Exception.class)

@@ -5,20 +5,23 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * CANH BAO: moi de dinh nghia PageDTO MOI KHAC — sua field theo dung bang DTO cua de.
- */
+import java.util.List;
+
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class PageDTO {
+public class DetailListDTO {
 
-    private int size;
-    private int page;
+    private int pageSize;
+
+    private int pageNo;
+
     private int totalPages;
-    private long totalElements;
+
     private boolean first;
+
     private boolean last;
-    private Object content;
+
+    private List<DetailResponseDTO> details;
 }

@@ -10,10 +10,6 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.List;
 
-/**
- * Co spring-security trong classpath thi mac dinh moi request bi chan —
- * config nay mo permitAll + CORS de test qua 8080 khong bi 401.
- */
 @Configuration
 public class SecurityConfig {
 

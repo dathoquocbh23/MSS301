@@ -20,9 +20,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * Ten controller + base path + message: COPY Y NGUYEN CAU CHU TRONG DE.
- */
 @Slf4j
 @RestController
 @RequestMapping("/api/masters")
@@ -36,10 +33,10 @@ public class SE193114MasterController {
 
     @PostMapping
     public ResponseEntity<ApiResponseDTO> create(@Validated(OnCreate.class) @RequestBody MasterDTO dto) {
-        log.info("POST /api/masters code={}", dto.getCode());
+        log.info("POST /api/masters");
         MasterDTO created = masterService.create(dto);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponseDTO.of(1, "Master is created successfully", created));
+                .body(ApiResponseDTO.of(1, "Master created successfully", created));
     }
 
     @PutMapping("/{masterId}")
@@ -47,30 +44,29 @@ public class SE193114MasterController {
                                                  @Validated(OnUpdate.class) @RequestBody MasterDTO dto) {
         log.info("PUT /api/masters/{}", masterId);
         MasterDTO updated = masterService.update(masterId, dto);
-        return ResponseEntity.ok(ApiResponseDTO.of(1, "Master is updated successfully", updated));
+        return ResponseEntity.ok(ApiResponseDTO.of(1, "Master updated successfully", updated));
     }
 
     @GetMapping("/{masterId}")
     public ResponseEntity<ApiResponseDTO> getById(@PathVariable Long masterId) {
         log.info("GET /api/masters/{}", masterId);
-        MasterDTO dto = masterService.getById(masterId);
-        return ResponseEntity.ok(ApiResponseDTO.of(1, "Master is retrieved successfully", dto));
+        return ResponseEntity.ok(ApiResponseDTO.of(1, "Successful", masterService.getById(masterId)));
     }
 
     @DeleteMapping("/{masterId}")
-    public ResponseEntity<ApiResponseDTO> delete(@PathVariable Long masterId) {
+    public ResponseEntity<ApiResponseDTO> deactivate(@PathVariable Long masterId) {
         log.info("DELETE /api/masters/{}", masterId);
-        masterService.softDelete(masterId);
+        masterService.deactivate(masterId);
         return ResponseEntity.ok(ApiResponseDTO.of(1, "Master is deactivated successfully", null));
     }
 
     @GetMapping
-    public ResponseEntity<ApiResponseDTO> list(@RequestParam(defaultValue = "0") Integer page,
-                                               @RequestParam(defaultValue = "10") Integer size,
+    public ResponseEntity<ApiResponseDTO> list(@RequestParam(required = false) Integer page,
+                                               @RequestParam(required = false) Integer size,
                                                @RequestParam(required = false) String name,
-                                               @RequestParam(required = false) String status) {
-        log.info("GET /api/masters page={} size={} name={} status={}", page, size, name, status);
-        PageDTO result = masterService.list(page, size, name, status);
-        return ResponseEntity.ok(ApiResponseDTO.of(1, "Masters are retrieved successfully", result));
+                                               @RequestParam(required = false) String ownerName) {
+        log.info("GET /api/masters page={} size={} name={} ownerName={}", page, size, name, ownerName);
+        PageDTO result = masterService.list(page, size, name, ownerName);
+        return ResponseEntity.ok(ApiResponseDTO.of(1, "Successful", result));
     }
 }

@@ -1,0 +1,162 @@
+### ============================================================
+###  PE2 — FoodService (/api/foods) — Feign sang Restaurant
+###  Status map: 1=OK  2=validation  4=not found  0=500
+###  Create/Update/Get trả FoodDTO PHẲNG (restaurantId);
+###  CHỈ List trả FoodListDTO {pageSize,pageNo,totalPages,first,last,foods[]}
+###  với restaurant NESTED — khác PE1, và KHÔNG có totalElements!
+### ============================================================
+
+### 01. Create food — hợp lệ
+# Expect: 201, status=1, data PHẲNG có restaurantId (không nested)
+POST {{detailUrl}}/api/foods
+Content-Type: application/json
+
+{
+  "name": "Spring Rolls",
+  "price": 45,
+  "ingredients": "rice paper, pork, shrimp",
+  "restaurantId": 1
+}
+
+### 02. Create — restaurantId không tồn tại (Feign verify)
+# Expect: 400, status=4, "Restaurant ID is not found"
+# (đề Trial ghi nhầm "Department ID is not found" — PE2 đã quyết sửa theo ngữ cảnh, xem DECISIONS.md #6)
+POST {{detailUrl}}/api/foods
+Content-Type: application/json
+
+{
+  "name": "Ghost Food",
+  "price": 10,
+  "ingredients": "air",
+  "restaurantId": 99999
+}
+
+### 02b. Create — thiếu restaurantId hoàn toàn
+# Expect: 400, status=2, "restaurantId is required"
+POST {{detailUrl}}/api/foods
+Content-Type: application/json
+
+{
+  "name": "No Restaurant Food",
+  "price": 10,
+  "ingredients": "air"
+}
+
+### 03. Create — thiếu name
+# Expect: 400, status=2
+POST {{detailUrl}}/api/foods
+Content-Type: application/json
+
+{
+  "price": 10,
+  "ingredients": "something",
+  "restaurantId": 1
+}
+
+### 04. Create — thiếu price (NotNull)
+# Expect: 400, status=2
+POST {{detailUrl}}/api/foods
+Content-Type: application/json
+
+{
+  "name": "No Price Food",
+  "ingredients": "mystery",
+  "restaurantId": 1
+}
+
+### 05. Create — thiếu ingredients
+# Expect: 400, status=2
+POST {{detailUrl}}/api/foods
+Content-Type: application/json
+
+{
+  "name": "No Ingredients",
+  "price": 20,
+  "restaurantId": 1
+}
+
+### 06. Get detail — id có sẵn trong init_trial_db.sql
+# Expect: 200, status=1, data PHẲNG (restaurantId, không có object restaurant)
+GET {{detailUrl}}/api/foods/1
+
+### 07. Get detail — không tồn tại
+# Expect: 400, status=4
+GET {{detailUrl}}/api/foods/99999
+
+### 08. Update — partial: chỉ đổi price
+# Expect: 200, status=1
+PUT {{detailUrl}}/api/foods/2
+Content-Type: application/json
+
+{
+  "price": 400
+}
+
+### 09. Update — đổi restaurantId hợp lệ (Feign verify lại)
+# Expect: 200, status=1, data.restaurantId=2
+PUT {{detailUrl}}/api/foods/2
+Content-Type: application/json
+
+{
+  "restaurantId": 2
+}
+
+### 10. Update — restaurantId không tồn tại
+# Expect: 400, status=4
+PUT {{detailUrl}}/api/foods/2
+Content-Type: application/json
+
+{
+  "restaurantId": 99999
+}
+
+### 11. Update — status ngoài enum ACTIVE|INACTIVE
+# Expect: 400, status=2
+PUT {{detailUrl}}/api/foods/2
+Content-Type: application/json
+
+{
+  "status": "SOLD_OUT"
+}
+
+### 12. Update — id không tồn tại
+# Expect: 400, status=4
+PUT {{detailUrl}}/api/foods/99999
+Content-Type: application/json
+
+{
+  "name": "Ghost"
+}
+
+### 13. Deactivate (soft delete)
+# Expect: 200, status=1; get lại id=3 → status="INACTIVE"
+DELETE {{detailUrl}}/api/foods/3
+
+### 14. Deactivate — không tồn tại
+# Expect: 400, status=4
+DELETE {{detailUrl}}/api/foods/99999
+
+### 15. List — mặc định — ĐIỂM KHÁC BIỆT LỚN NHẤT của PE2
+# Expect: 200, status=1, data = FoodListDTO {pageSize,pageNo,totalPages,first,last,foods}
+#   KHÔNG có totalElements; mỗi phần tử foods[] có restaurant NESTED (Feign per row)
+GET {{detailUrl}}/api/foods
+
+### 16. List — phân trang
+# Expect: 200, pageSize=2, pageNo=0
+GET {{detailUrl}}/api/foods?page=0&size=2
+
+### 17. List — filter name partial
+# Expect: 200, foods chỉ chứa món có "Grilled"
+GET {{detailUrl}}/api/foods?name=Grilled
+
+### 18. List — filter ingredients partial (tên param của đề Trial!)
+# Expect: 200, foods chỉ chứa món có "beef" trong ingredients
+GET {{detailUrl}}/api/foods?ingredients=beef
+
+### 19. List — size vượt 100
+# Expect: 400, status=2
+GET {{detailUrl}}/api/foods?size=101
+
+### 20. List — page âm
+# Expect: 400, status=2
+GET {{detailUrl}}/api/foods?page=-1

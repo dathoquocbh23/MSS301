@@ -11,7 +11,7 @@ public interface MasterService {
 
     MasterDTO getById(Long masterId);
 
-    void softDelete(Long masterId);
+    void deactivate(Long masterId);
 
-    PageDTO list(Integer page, Integer size, String name, String status);
+    PageDTO list(Integer page, Integer size, String name, String ownerName);
 }
