@@ -1,0 +1,304 @@
+### ============================================================
+###  ROOM SERVICE (/api/rooms) - MSS301 SU26 PE1
+###  Chon env "gateway" (8080) - dung duong grader cham.
+###
+###  BANG MA CUA DE NAY (KHAC HAN cac de truoc, doc ky):
+###    201 / status 1  create OK        200 / status 1  OK
+###    406 / status 2  validation failed        <-- KHONG phai 400
+###    226 / status 3  room number duplicated   <-- KHONG phai 400
+###    404 / status 4  not found                <-- KHONG phai 400
+###    500 / status 0  internal error
+###
+###  Truoc khi chay: chay sql\seed_test_db.sql de co du lieu chuan
+###  (room id 1..12; id 1 = A-101 DOUBLE 850000 cap 2 AVAILABLE,
+###   id 3 OCCUPIED, id 4 MAINTENANCE).
+###  Ban tu dong day du 101 case: http\run-tests.ps1
+### ============================================================
+
+
+### ---------- R5. GET /api/rooms - Get Room List ----------
+
+### R5.1 List mac dinh -> 200/1, PageDTO du 7 field
+# Expect: size=10, page=0, totalPages=2, totalElements=12, first=true, last=false, content[10]
+GET {{roomUrl}}/api/rooms
+
+### R5.2 Kiem tra ten field cua PageDTO va RoomDTO
+# Expect PageDTO: size, page, totalPages, totalElements, first, last, content
+# Expect RoomDTO: roomId, roomNumber, roomType, pricePerNight, capacity, floor, status
+GET {{roomUrl}}/api/rooms?size=1
+
+### R5.3 ApiResponseDTO co timestamp ISO 8601 YYYY-MM-DDThh:mm:ssZ
+# Expect: "timestamp": "2026-07-31T08:15:30Z" (co chu Z, khong co mili giay)
+GET {{roomUrl}}/api/rooms
+
+### R5.4 Phan trang
+# Expect: 200/1, page=1, size=5
+GET {{roomUrl}}/api/rooms?page=1&size=5
+
+### R5.5 Filter roomType hop le
+# Expect: 200/1, totalElements=3, moi row roomType=SUITE
+GET {{roomUrl}}/api/rooms?roomType=SUITE
+
+### R5.6 Filter status hop le
+# Expect: 200/1, totalElements=8, moi row status=AVAILABLE
+GET {{roomUrl}}/api/rooms?status=AVAILABLE
+
+### R5.7 roomType ngoai Enum -> 406/2
+# BAY: de khai roomType kieu Enum -> gia tri bay phai 406/2, KHONG duoc tra 200 rong.
+GET {{roomUrl}}/api/rooms?roomType=BOGUS
+
+### R5.8 status ngoai Enum -> 406/2
+GET {{roomUrl}}/api/rooms?status=BOGUS
+
+### R5.9 size=100 (bang max) -> 200/1
+GET {{roomUrl}}/api/rooms?size=100
+
+### R5.10 size=101 (vuot max 100) -> 406/2
+GET {{roomUrl}}/api/rooms?size=101
+
+### R5.11 size=0 -> 406/2
+GET {{roomUrl}}/api/rooms?size=0
+
+### R5.12 page am -> 406/2
+GET {{roomUrl}}/api/rooms?page=-1
+
+### R5.13 page sai kieu -> 406/2 (TypeMismatch phai duoc handler bat, khong duoc 500)
+GET {{roomUrl}}/api/rooms?page=xyz
+
+
+### ---------- R1. POST /api/rooms - Create Room ----------
+
+### R1.1 Create hop le -> 201/1, status mac dinh AVAILABLE
+POST {{roomUrl}}/api/rooms
+Content-Type: application/json
+
+{
+  "roomNumber": "Z-{{$timestamp}}",
+  "roomType": "DELUXE",
+  "pricePerNight": 1234567.89,
+  "capacity": 4,
+  "floor": 9
+}
+
+> {% client.global.set("roomId", response.body.data.roomId); %}
+
+### R1.2 Create co gui status=OCCUPIED -> van phai ra AVAILABLE
+# De ghi "Default status is AVAILABLE" -> service EP, khong nhan tu client.
+POST {{roomUrl}}/api/rooms
+Content-Type: application/json
+
+{
+  "roomNumber": "Y-{{$timestamp}}",
+  "roomType": "SINGLE",
+  "pricePerNight": 100000,
+  "capacity": 1,
+  "floor": 1,
+  "status": "OCCUPIED"
+}
+
+### R1.3 Trung roomNumber -> 226/3
+POST {{roomUrl}}/api/rooms
+Content-Type: application/json
+
+{
+  "roomNumber": "A-101",
+  "roomType": "SINGLE",
+  "pricePerNight": 100000,
+  "capacity": 1,
+  "floor": 1
+}
+
+### R1.4 Thieu roomNumber -> 406/2
+POST {{roomUrl}}/api/rooms
+Content-Type: application/json
+
+{ "roomType": "SINGLE", "pricePerNight": 100000, "capacity": 1, "floor": 1 }
+
+### R1.5 Thieu roomType -> 406/2
+POST {{roomUrl}}/api/rooms
+Content-Type: application/json
+
+{ "roomNumber": "N-{{$timestamp}}", "pricePerNight": 100000, "capacity": 1, "floor": 1 }
+
+### R1.6 Thieu pricePerNight -> 406/2
+POST {{roomUrl}}/api/rooms
+Content-Type: application/json
+
+{ "roomNumber": "N-{{$timestamp}}", "roomType": "SINGLE", "capacity": 1, "floor": 1 }
+
+### R1.7 Thieu capacity -> 406/2
+POST {{roomUrl}}/api/rooms
+Content-Type: application/json
+
+{ "roomNumber": "N-{{$timestamp}}", "roomType": "SINGLE", "pricePerNight": 100000, "floor": 1 }
+
+### R1.8 Thieu floor -> 406/2
+POST {{roomUrl}}/api/rooms
+Content-Type: application/json
+
+{ "roomNumber": "N-{{$timestamp}}", "roomType": "SINGLE", "pricePerNight": 100000, "capacity": 1 }
+
+### R1.9 roomNumber 21 ky tu (NVARCHAR(20)) -> 406/2
+POST {{roomUrl}}/api/rooms
+Content-Type: application/json
+
+{ "roomNumber": "XXXXXXXXXXXXXXXXXXXXX", "roomType": "SINGLE", "pricePerNight": 100000, "capacity": 1, "floor": 1 }
+
+### R1.10 roomType ngoai enum -> 406/2 (CK_Rooms_Type)
+POST {{roomUrl}}/api/rooms
+Content-Type: application/json
+
+{ "roomNumber": "N-{{$timestamp}}", "roomType": "KING", "pricePerNight": 100000, "capacity": 1, "floor": 1 }
+
+### R1.11 pricePerNight = 0 -> 406/2 (CK_Rooms_Price: > 0)
+POST {{roomUrl}}/api/rooms
+Content-Type: application/json
+
+{ "roomNumber": "N-{{$timestamp}}", "roomType": "SINGLE", "pricePerNight": 0, "capacity": 1, "floor": 1 }
+
+### R1.12 pricePerNight am -> 406/2
+POST {{roomUrl}}/api/rooms
+Content-Type: application/json
+
+{ "roomNumber": "N-{{$timestamp}}", "roomType": "SINGLE", "pricePerNight": -5, "capacity": 1, "floor": 1 }
+
+### R1.13 capacity = 0 -> 406/2 (CK_Rooms_Capacity: 1..10)
+POST {{roomUrl}}/api/rooms
+Content-Type: application/json
+
+{ "roomNumber": "N-{{$timestamp}}", "roomType": "SINGLE", "pricePerNight": 100000, "capacity": 0, "floor": 1 }
+
+### R1.14 capacity = 11 -> 406/2
+POST {{roomUrl}}/api/rooms
+Content-Type: application/json
+
+{ "roomNumber": "N-{{$timestamp}}", "roomType": "SINGLE", "pricePerNight": 100000, "capacity": 11, "floor": 1 }
+
+### R1.15 floor = 0 -> 406/2 (CK_Rooms_Floor: >= 1)
+POST {{roomUrl}}/api/rooms
+Content-Type: application/json
+
+{ "roomNumber": "N-{{$timestamp}}", "roomType": "SINGLE", "pricePerNight": 100000, "capacity": 1, "floor": 0 }
+
+### R1.16 capacity sai kieu -> 406/2
+POST {{roomUrl}}/api/rooms
+Content-Type: application/json
+
+{ "roomNumber": "N-{{$timestamp}}", "roomType": "SINGLE", "pricePerNight": 100000, "capacity": "abc", "floor": 1 }
+
+### R1.17 JSON hong -> 406/2 (khong duoc 500)
+POST {{roomUrl}}/api/rooms
+Content-Type: application/json
+
+{ "roomNumber":
+
+### R1.18 status ngoai enum -> 406/2
+POST {{roomUrl}}/api/rooms
+Content-Type: application/json
+
+{ "roomNumber": "N-{{$timestamp}}", "roomType": "SINGLE", "pricePerNight": 100000, "capacity": 1, "floor": 1, "status": "BROKEN" }
+
+
+### ---------- R3. GET /api/rooms/{roomId} - Get Room Detail ----------
+
+### R3.1 Id ton tai -> 200/1, RoomDTO day du
+GET {{roomUrl}}/api/rooms/1
+
+### R3.2 Id khong ton tai -> 404/4, message "Room is not found"
+GET {{roomUrl}}/api/rooms/999999
+
+### R3.3 Id sai kieu -> 406/2
+GET {{roomUrl}}/api/rooms/abc
+
+
+### ---------- R2. PUT /api/rooms/{roomId} - Update Room ----------
+
+### R2.1 Partial update 1 field -> 200/1, cac field khac GIU NGUYEN
+PUT {{roomUrl}}/api/rooms/1
+Content-Type: application/json
+
+{ "pricePerNight": 999000 }
+
+### R2.2 Get lai doi chieu field khac con nguyen
+# Expect: roomNumber="A-101", roomType="DOUBLE", capacity=2, floor=1
+GET {{roomUrl}}/api/rooms/1
+
+### R2.3 Update status -> 200/1
+PUT {{roomUrl}}/api/rooms/2
+Content-Type: application/json
+
+{ "status": "OCCUPIED" }
+
+### R2.4 Giu nguyen roomNumber cua CHINH MINH -> 200/1
+# Check trung phai LOAI TRU chinh row dang sua.
+PUT {{roomUrl}}/api/rooms/1
+Content-Type: application/json
+
+{ "roomNumber": "A-101", "floor": 5 }
+
+### R2.5 Doi roomNumber trung row KHAC -> 226/3
+PUT {{roomUrl}}/api/rooms/1
+Content-Type: application/json
+
+{ "roomNumber": "A-102" }
+
+### R2.6 Id khong ton tai -> 404/4
+PUT {{roomUrl}}/api/rooms/999999
+Content-Type: application/json
+
+{ "floor": 2 }
+
+### R2.7 roomType ngoai enum -> 406/2
+PUT {{roomUrl}}/api/rooms/1
+Content-Type: application/json
+
+{ "roomType": "KING" }
+
+### R2.8 capacity = 11 -> 406/2
+PUT {{roomUrl}}/api/rooms/1
+Content-Type: application/json
+
+{ "capacity": 11 }
+
+### R2.9 pricePerNight = 0 -> 406/2
+PUT {{roomUrl}}/api/rooms/1
+Content-Type: application/json
+
+{ "pricePerNight": 0 }
+
+### R2.10 floor = 0 -> 406/2
+PUT {{roomUrl}}/api/rooms/1
+Content-Type: application/json
+
+{ "floor": 0 }
+
+### R2.11 roomNumber 21 ky tu -> 406/2
+PUT {{roomUrl}}/api/rooms/1
+Content-Type: application/json
+
+{ "roomNumber": "XXXXXXXXXXXXXXXXXXXXX" }
+
+### R2.12 roomNumber chuoi rong -> 406/2
+# BAY: @NotBlank chi bat o group OnCreate, PUT gui "" se ghi de rong neu khong chan them.
+PUT {{roomUrl}}/api/rooms/1
+Content-Type: application/json
+
+{ "roomNumber": "" }
+
+### R2.13 Id sai kieu -> 406/2
+PUT {{roomUrl}}/api/rooms/abc
+Content-Type: application/json
+
+{ "floor": 2 }
+
+
+### ---------- R4. DELETE /api/rooms/{roomId} - Set Room to Maintenance ----------
+
+### R4.1 Xoa mem -> 200/1 va data phai NULL ("No data returned")
+DELETE {{roomUrl}}/api/rooms/1
+
+### R4.2 Get lai -> status = MAINTENANCE, row VAN CON trong DB
+GET {{roomUrl}}/api/rooms/1
+
+### R4.3 Id khong ton tai -> 404/4
+DELETE {{roomUrl}}/api/rooms/999999
