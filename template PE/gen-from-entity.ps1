@@ -41,6 +41,8 @@ param(
     [string]$Unique = "",                              # field DTO de check trung theo DE (override doan tu cot UNIQUE)
     [string]$DetailShape = "B",                        # A=phang het | B=DTO phang + ResponseDTO nested cho list | C=1 DTO nested
     [string]$StatusEnum = "ACTIVE,INACTIVE",           # tap gia tri status theo CHECK constraint cua DE
+    [string]$StatusOnCreate = "",                      # status luc create, "" = PHAN TU DAU cua -StatusEnum
+    [string]$StatusOnDelete = "",                      # status luc delete (xoa mem), "" = PHAN TU CUOI
     [object[]]$Rules = @(),                            # rule validation theo field (hashtable, dien qua gen-all.ps1)
     [string]$SizeOverMax = "",                         # "error" = size>max tra 400/2 | "clamp" = ep ve max | "" = giu nguyen
     [switch]$DryRun
@@ -777,10 +779,40 @@ function Patch-ServiceLayer($model, [string]$oldRepoText) {
         }
 
         if ($t -like '*ServiceImpl.java') {
+            # --- status mac dinh luc CREATE va gia tri luc DELETE (xoa mem) ---
+            # Quy tac dung cho ca 4 de da gap: PHAN TU DAU cua -StatusEnum = default luc create,
+            # PHAN TU CUOI = gia tri luc delete.
+            #   ACTIVE,INACTIVE                              -> create ACTIVE   / delete INACTIVE
+            #   AVAILABLE,OCCUPIED,MAINTENANCE               -> create AVAILABLE/ delete MAINTENANCE
+            #   CONFIRMED,CHECKED_IN,CHECKED_OUT,CANCELLED   -> create CONFIRMED/ delete CANCELLED
+            # De nao khong theo quy tac nay -> truyen -StatusOnCreate / -StatusOnDelete de de len.
+            $allVals = @($StatusEnum -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' })
+            if ($allVals.Count -gt 0) {
+                $createVal = if ($StatusOnCreate -ne '') { $StatusOnCreate } else { $allVals[0] }
+                $deleteVal = if ($StatusOnDelete -ne '') { $StatusOnDelete } else { $allVals[$allVals.Count - 1] }
+
+                $beforeCreate = $txt
+                $txt = [regex]::Replace($txt,
+                    '(entity\.setStatus\(")[A-Z_]+("\);\s*\r?\n\s*\r?\n?\s*return\s+\w+Mapper\.toDTO)',
+                    "`${1}$createVal`${2}")
+                if ($txt -ceq $beforeCreate) {
+                    # fallback: setStatus dau tien trong file = create
+                    $txt = [regex]::Replace($txt, '(entity\.setStatus\(")[A-Z_]+("\);)', "`${1}$createVal`${2}", 1)
+                }
+
+                # deactivate/cancel: setStatus nam ngay truoc repository.save trong method xoa mem
+                # [\s\S]*? chu KHONG phai [^}]*? - log.info("...id={}", ...) co dau } chan ngang
+                $txt = [regex]::Replace($txt,
+                    '(public void (?:deactivate|cancel)\([^\)]*\)\s*\{[\s\S]*?)entity\.setStatus\("[A-Z_]+"\);',
+                    "`${1}entity.setStatus(`"$deleteVal`");")
+
+                [void]$warnings.Add("status: create -> '$createVal', delete -> '$deleteVal' (lay dau/cuoi cua -StatusEnum). DOI CHIEU cau 'Default status is ...' va 'Sets the ... status to ...' trong DE.")
+            }
+
             $statusSpec = $specs | Where-Object { $_.Field.Name -eq 'status' } | Select-Object -First 1
             if ($statusSpec) {
                 $p = $statusSpec.Param
-                $enumVals = @($StatusEnum -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' })
+                $enumVals = $allVals
                 $listOf = 'java.util.List.of(' + (($enumVals | ForEach-Object { '"' + $_ + '"' }) -join ', ') + ')'
                 if ($txt -match 'ALLOWED_STATUS\s*=') {
                     $txt = [regex]::Replace($txt, 'ALLOWED_STATUS\s*=\s*java\.util\.List\.of\([^)]*\)', "ALLOWED_STATUS = $listOf")

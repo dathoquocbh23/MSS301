@@ -9,14 +9,14 @@
 
 $Src        = $PSScriptRoot                                        # folder "template PE" (tu nhan)
 $Dest       = "e:\fpt_university\Semester8\MSS301\PE\EXAM"     # folder bai lam moi
-$MasterNew  = "Restaurant"        # ten thay cho Master  (Viet Hoa Dau, dung chinh ta de)
-$DetailNew  = "Food"       # ten thay cho Detail  (Viet Hoa Dau)
+$MasterNew  = "Room"        # ten thay cho Master  (Viet Hoa Dau, dung chinh ta de)
+$DetailNew  = "Reservation"       # ten thay cho Detail  (Viet Hoa Dau)
 $CategoryNew = "Category"     # ten entity phu theo de (chi co nghia khi $HasCategory = $true)
-$GatewayNew = "FoodyGateway"   # ten project gateway theo de (phan SAU MSSV)
+$GatewayNew = "HotelGateway"   # ten project gateway theo de (phan SAU MSSV)
 
 # De KHONG co entity phu (kieu PE1 Department/Employee) -> dat $false:
 # script tu XOA 7 file Category*, go route gateway, cat cac dong CATEGORY trong ServiceImpl.
-$HasCategory = $true
+$HasCategory = $false
 
 # So nhieu trong URL (/api/...). De trong = tu dong lay ten thuong + "s".
 # BAT BUOC dien tay khi so nhieu bat quy tac: hotel-types, categories, companies
@@ -30,6 +30,19 @@ $CategoryPlural = "categories"
 $MasterTable   = ""
 $DetailTable   = ""
 $CategoryTable = ""
+
+# ---------------------------------------------------------------------
+# CAU HINH application.properties - CHEP TU BANG "Configuration" CUA DE.
+# MUC 3 Grading Policies: sai bang nay = 0 DIEM CA BAI. Script ghi cho ca 2 service
+# nen khong con canh "doi password ben Master, quen ben Detail" (loi that ngay 27/07).
+$DbName       = "MSS301_2026_PE"
+$DbUser       = "sa"
+$DbPass       = "sa"
+$DbUrl        = "jdbc:sqlserver://localhost:1433;databaseName=$DbName;encrypt=false;"
+$DdlAuto      = "none"
+$PortMaster   = 8081
+$PortDetail   = 8082
+$PortGateway  = 8080
 
 # ---------------------------------------------------------------------
 function ConvertTo-CamelName([string]$s) { return $s.Substring(0, 1).ToLower() + $s.Substring(1) }
@@ -184,6 +197,34 @@ Get-ChildItem $Dest -Recurse -File | Where-Object { $_.Extension -in '.java', '.
     if ($new -cne $t) { [System.IO.File]::WriteAllText($_.FullName, $new) }
 }
 
+# 4c) Ghi application.properties theo bang Configuration cua de (muc 0 diem)
+function Set-Prop([string]$file, [string]$key, [string]$value) {
+    if (-not (Test-Path $file)) { return }
+    $lines = [System.IO.File]::ReadAllLines($file)
+    $found = $false
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        if ($lines[$i] -match ('^\s*' + [regex]::Escape($key) + '\s*=')) {
+            $lines[$i] = "$key=$value"
+            $found = $true
+        }
+    }
+    if (-not $found) { $lines += "$key=$value" }
+    [System.IO.File]::WriteAllLines($file, [string[]]$lines)
+}
+
+$propMaster = Join-Path $Dest "SE193114${MasterNew}Service\src\main\resources\application.properties"
+$propDetail = Join-Path $Dest "SE193114${DetailNew}Service\src\main\resources\application.properties"
+$propGw     = Join-Path $Dest "SE193114$GatewayNew\src\main\resources\application.properties"
+
+foreach ($pair in @(@{ f = $propMaster; p = $PortMaster }, @{ f = $propDetail; p = $PortDetail })) {
+    Set-Prop $pair.f 'spring.datasource.url'          $DbUrl
+    Set-Prop $pair.f 'spring.datasource.username'     $DbUser
+    Set-Prop $pair.f 'spring.datasource.password'     $DbPass
+    Set-Prop $pair.f 'spring.jpa.hibernate.ddl-auto'  $DdlAuto
+    Set-Prop $pair.f 'server.port'                    $pair.p
+}
+Set-Prop $propGw 'server.port' $PortGateway
+
 # 5) Bao cao + nhac viec script KHONG lam duoc
 Write-Host ""
 Write-Host "XONG. Bai lam o: $Dest" -ForegroundColor Green
@@ -199,6 +240,15 @@ Write-Host "  3. Message + HTTP code + status copy Y NGUYEN cau chu de"
 if ($HasCategory) { Write-Host "  4. Entity phu ${CategoryNew}: doi chieu bang cua de + route /api/$CategoryPlural da co san" }
 else { Write-Host "  4. (Khong co entity phu - da xoa; MasterDTO van con field categoryId, gen-from-entity se tu bo khi DB khong co cot do)" }
 Write-Host "  5. Rule ngay (format/after X/not future...) - bat hang so trong common/ValidDate.java"
-Write-Host "  6. application.properties: port/db/username/password theo de - SUA CA HAI SERVICE"
-Write-Host "     (27/07: Master doi password roi ma Detail van password cu -> 8082 chet ngay khi start)"
-Write-Host "  7. MOI CHECK constraint trong SQL de -> check tuong ung o code (khong thi 500/0 thay vi 400/2)"
+Write-Host "  6. MOI CHECK constraint trong SQL de -> check tuong ung o code (khong thi 500/0 thay vi ma validation)"
+Write-Host ""
+Write-Host "DA GHI HO application.properties (doi chieu lai bang Configuration cua de!):" -ForegroundColor Cyan
+Write-Host "     db=$DbName  user=$DbUser  pass=$DbPass  ddl-auto=$DdlAuto"
+Write-Host "     port: $PortMaster / $PortDetail / $PortGateway"
+Write-Host ""
+Write-Host "BUOC TIEP THEO BAT BUOC - BANG MA HTTP:" -ForegroundColor Yellow
+Write-Host "  Mo gen-all.ps1, dien \$HttpValidation/\$HttpDuplicate/\$HttpNotFound/\$HttpBusiness"
+Write-Host "  theo cot 'HTTP Code' trong bang Response Behavior cua DE, roi chay:"
+Write-Host "     powershell -ExecutionPolicy Bypass -File .\gen-all.ps1 -HttpOnly"
+Write-Host "  Template mac dinh 400 cho tat ca (kieu de Trial/PE1). De SU26 PE1 dung 406/226/404/400"
+Write-Host "  -> khong doi la sai HTTP code o GAN NHU MOI dong cua moi bang." -ForegroundColor Yellow
