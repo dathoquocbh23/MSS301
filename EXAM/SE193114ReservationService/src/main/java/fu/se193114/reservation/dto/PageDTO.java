@@ -5,23 +5,23 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.util.List;
-
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class ReservationListDTO {
+public class PageDTO {
 
-    private int pageSize;
+    private int size;
 
-    private int pageNo;
+    private int page;
 
     private int totalPages;
+
+    private long totalElements;
 
     private boolean first;
 
     private boolean last;
 
-    private List<ReservationDetailDTO> reservations;
+    private Object content;
 }

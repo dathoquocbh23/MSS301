@@ -28,12 +28,6 @@ public final class ReservationMapper {
         return dto;
     }
 
-    public static ReservationDTO toDTO(Reservation entity, RoomDTO room) {
-        ReservationDTO dto = toDTO(entity);
-
-        return dto;
-    }
-
     public static ReservationDetailDTO toResponseDTO(Reservation entity, RoomDTO room) {
         if (entity == null) {
             return null;
@@ -47,6 +41,7 @@ public final class ReservationMapper {
         dto.setCheckOutDate(entity.getCheckOutDate());
         dto.setNumberOfGuests(entity.getNumberOfGuests());
         dto.setTotalAmount(entity.getTotalAmount());
+        dto.setStatus(entity.getStatus());
         dto.setRoom(room);
         return dto;
     }
@@ -86,9 +81,6 @@ public final class ReservationMapper {
         }
         if (dto.getNumberOfGuests() != null) {
             entity.setNumberOfGuests(dto.getNumberOfGuests());
-        }
-        if (dto.getTotalAmount() != null) {
-            entity.setTotalAmount(dto.getTotalAmount());
         }
         if (dto.getStatus() != null) {
             entity.setStatus(dto.getStatus());

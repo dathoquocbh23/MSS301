@@ -21,7 +21,7 @@ public class DateOnlySerializer extends JsonSerializer<Date> {
         generator.writeString(ValidDate.SPEC_FORMAT.format(toLocalDate(value)));
     }
 
-    static LocalDate toLocalDate(Date value) {
+    public static LocalDate toLocalDate(Date value) {
         if (value instanceof java.sql.Date sqlDate) {
             return sqlDate.toLocalDate();
         }

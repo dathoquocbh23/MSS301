@@ -1,7 +1,8 @@
 package fu.se193114.reservation.service;
 
+import fu.se193114.reservation.dto.PageDTO;
 import fu.se193114.reservation.dto.ReservationDTO;
-import fu.se193114.reservation.dto.ReservationListDTO;
+import fu.se193114.reservation.dto.ReservationDetailDTO;
 
 public interface ReservationService {
 
@@ -9,9 +10,9 @@ public interface ReservationService {
 
     ReservationDTO update(Long reservationId, ReservationDTO dto);
 
-    ReservationDTO getById(Long reservationId);
+    ReservationDetailDTO getById(Long reservationId);
 
-    void deactivate(Long reservationId);
+    void cancel(Long reservationId);
 
-    ReservationListDTO list(Integer page, Integer size, String guestName, String status);
+    PageDTO list(Integer page, Integer size, String guestName, String status);
 }

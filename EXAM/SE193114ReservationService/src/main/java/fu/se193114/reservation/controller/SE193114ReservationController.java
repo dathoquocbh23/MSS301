@@ -3,8 +3,8 @@ package fu.se193114.reservation.controller;
 import fu.se193114.reservation.common.OnCreate;
 import fu.se193114.reservation.common.OnUpdate;
 import fu.se193114.reservation.dto.ApiResponseDTO;
+import fu.se193114.reservation.dto.PageDTO;
 import fu.se193114.reservation.dto.ReservationDTO;
-import fu.se193114.reservation.dto.ReservationListDTO;
 import fu.se193114.reservation.service.ReservationService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -54,10 +54,10 @@ public class SE193114ReservationController {
     }
 
     @DeleteMapping("/{reservationId}")
-    public ResponseEntity<ApiResponseDTO> deactivate(@PathVariable Long reservationId) {
+    public ResponseEntity<ApiResponseDTO> cancel(@PathVariable Long reservationId) {
         log.info("DELETE /api/reservations/{}", reservationId);
-        reservationService.deactivate(reservationId);
-        return ResponseEntity.ok(ApiResponseDTO.of(1, "Reservation is deactivated successfully", null));
+        reservationService.cancel(reservationId);
+        return ResponseEntity.ok(ApiResponseDTO.of(1, "Reservation cancelled successfully", null));
     }
 
     @GetMapping
@@ -66,7 +66,7 @@ public class SE193114ReservationController {
                                                @RequestParam(required = false) String guestName,
                                                @RequestParam(required = false) String status) {
         log.info("GET /api/reservations page={} size={} guestName={} status={}", page, size, guestName, status);
-        ReservationListDTO result = reservationService.list(page, size, guestName, status);
+        PageDTO result = reservationService.list(page, size, guestName, status);
         return ResponseEntity.ok(ApiResponseDTO.of(1, "Successful", result));
     }
 }

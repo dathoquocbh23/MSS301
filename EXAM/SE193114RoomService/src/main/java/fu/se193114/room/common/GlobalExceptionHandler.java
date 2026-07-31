@@ -19,64 +19,94 @@ import java.util.List;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    private static final HttpStatus HTTP_VALIDATION = HttpStatus.NOT_ACCEPTABLE;
+    private static final HttpStatus HTTP_DUPLICATE = HttpStatus.IM_USED;
+    private static final HttpStatus HTTP_NOT_FOUND = HttpStatus.NOT_FOUND;
+    private static final HttpStatus HTTP_BUSINESS = HttpStatus.BAD_REQUEST;
+    private static final HttpStatus HTTP_ERROR = HttpStatus.INTERNAL_SERVER_ERROR;
+
+    private static final int ST_VALIDATION = 2;
+    private static final int ST_DUPLICATE = 3;
+    private static final int ST_NOT_FOUND = 4;
+    private static final int ST_BUSINESS = 5;
+    private static final int ST_ERROR = 0;
+
+    private static final boolean VALIDATION_MESSAGE_IS_FIXED = true;
+    private static final String VALIDATION_MESSAGE = "Data validation failed";
+    private static final String ERROR_MESSAGE = "Internal server error";
+
     @ExceptionHandler(NotFoundException.class)
     public ResponseEntity<ApiResponseDTO> handleNotFound(NotFoundException ex) {
         log.warn(ex.getMessage());
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(ApiResponseDTO.of(4, ex.getMessage(), null));
+        return ResponseEntity.status(HTTP_NOT_FOUND)
+                .body(ApiResponseDTO.of(ST_NOT_FOUND, ex.getMessage(), null));
     }
 
     @ExceptionHandler(DuplicateNameException.class)
     public ResponseEntity<ApiResponseDTO> handleDuplicateName(DuplicateNameException ex) {
         log.warn(ex.getMessage());
-        return ResponseEntity.status(HttpStatus.IM_USED)
-                .body(ApiResponseDTO.of(3, ex.getMessage(), null));
+        return ResponseEntity.status(HTTP_DUPLICATE)
+                .body(ApiResponseDTO.of(ST_DUPLICATE, ex.getMessage(), null));
+    }
+
+    @ExceptionHandler(BusinessRuleException.class)
+    public ResponseEntity<ApiResponseDTO> handleBusinessRule(BusinessRuleException ex) {
+        log.warn(ex.getMessage());
+        return ResponseEntity.status(HTTP_BUSINESS)
+                .body(ApiResponseDTO.of(ST_BUSINESS, ex.getMessage(), null));
     }
 
     @ExceptionHandler(ValidationException.class)
     public ResponseEntity<ApiResponseDTO> handleValidation(ValidationException ex) {
-        log.warn(ex.getMessage());
-        return ResponseEntity.status(HttpStatus.NOT_ACCEPTABLE)
-                .body(ApiResponseDTO.of(2, ex.getMessage(), null));
+        log.warn("Validation failed: {}", ex.getMessage());
+        return ResponseEntity.status(HTTP_VALIDATION)
+                .body(ApiResponseDTO.of(ST_VALIDATION, validationMessage(ex.getMessage()), null));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponseDTO> handleMethodArgumentNotValid(MethodArgumentNotValidException ex) {
         List<String> messages = new ArrayList<>();
         for (FieldError fieldError : ex.getBindingResult().getFieldErrors()) {
-            messages.add(fieldError.getDefaultMessage());
+            messages.add(fieldError.getField() + ": " + fieldError.getDefaultMessage());
         }
-        String message = messages.isEmpty() ? "Data validation failed" : String.join("; ", messages);
-        log.warn(message);
-        return ResponseEntity.status(HttpStatus.NOT_ACCEPTABLE)
-                .body(ApiResponseDTO.of(2, message, null));
+        String detail = String.join("; ", messages);
+        log.warn("Validation failed: {}", detail);
+        return ResponseEntity.status(HTTP_VALIDATION)
+                .body(ApiResponseDTO.of(ST_VALIDATION, validationMessage(detail), null));
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiResponseDTO> handleNotReadable(HttpMessageNotReadableException ex) {
         log.warn("Malformed request body: {}", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.NOT_ACCEPTABLE)
-                .body(ApiResponseDTO.of(2, "Data validation failed", null));
+        return ResponseEntity.status(HTTP_VALIDATION)
+                .body(ApiResponseDTO.of(ST_VALIDATION, VALIDATION_MESSAGE, null));
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ApiResponseDTO> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
         log.warn("Type mismatch on parameter: {}", ex.getName());
-        return ResponseEntity.status(HttpStatus.NOT_ACCEPTABLE)
-                .body(ApiResponseDTO.of(2, "Data validation failed", null));
+        return ResponseEntity.status(HTTP_VALIDATION)
+                .body(ApiResponseDTO.of(ST_VALIDATION, VALIDATION_MESSAGE, null));
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiResponseDTO> handleDataIntegrity(DataIntegrityViolationException ex) {
         log.warn("Database constraint violated: {}", ex.getMostSpecificCause().getMessage());
-        return ResponseEntity.status(HttpStatus.NOT_ACCEPTABLE)
-                .body(ApiResponseDTO.of(2, "Data validation failed", null));
+        return ResponseEntity.status(HTTP_VALIDATION)
+                .body(ApiResponseDTO.of(ST_VALIDATION, VALIDATION_MESSAGE, null));
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponseDTO> handleAll(Exception ex) {
-        log.error("Internal server error", ex);
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiResponseDTO.of(0, "Internal server error", null));
+        log.error(ERROR_MESSAGE, ex);
+        return ResponseEntity.status(HTTP_ERROR)
+                .body(ApiResponseDTO.of(ST_ERROR, ERROR_MESSAGE, null));
+    }
+
+    private String validationMessage(String detail) {
+        if (VALIDATION_MESSAGE_IS_FIXED || detail == null || detail.isEmpty()) {
+            return VALIDATION_MESSAGE;
+        }
+        return detail;
     }
 }

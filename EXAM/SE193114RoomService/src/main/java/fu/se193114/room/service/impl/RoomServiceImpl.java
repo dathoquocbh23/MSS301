@@ -26,6 +26,7 @@ public class RoomServiceImpl implements RoomService {
     private static final int MAX_PAGE_SIZE = 100;
     private static final boolean SIZE_OVER_MAX_IS_ERROR = true;
     private static final java.util.List<String> ALLOWED_STATUS = java.util.List.of("AVAILABLE", "OCCUPIED", "MAINTENANCE");
+    private static final java.util.List<String> ALLOWED_ROOM_TYPE = java.util.List.of("SINGLE", "DOUBLE", "SUITE", "DELUXE");
 
     private final RoomRepository repository;
 
@@ -51,7 +52,7 @@ public class RoomServiceImpl implements RoomService {
     @Override
     public RoomDTO update(Long roomId, RoomDTO dto) {
         log.info("Updating room id={}", roomId);
-        Room entity = findOrThrow(roomId, "Room Id is not found");
+        Room entity = findOrThrow(roomId, "Room is not found");
 
         if (dto.getRoomNumber() != null && repository.existsByRoomNumberAndRoomIdNot(dto.getRoomNumber(), roomId)) {
             throw new DuplicateNameException("Room number is duplicated");
@@ -86,6 +87,9 @@ public class RoomServiceImpl implements RoomService {
         }
         pageSize = Math.min(pageSize, MAX_PAGE_SIZE);
         if (status != null && !status.trim().isEmpty() && !ALLOWED_STATUS.contains(status)) {
+            throw new ValidationException("Data validation failed");
+        }
+        if (roomType != null && !roomType.trim().isEmpty() && !ALLOWED_ROOM_TYPE.contains(roomType)) {
             throw new ValidationException("Data validation failed");
         }
 

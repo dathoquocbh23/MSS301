@@ -24,7 +24,7 @@ public @interface ValidDate {
     DateTimeFormatter SPEC_FORMAT =
             DateTimeFormatter.ofPattern("dd/MM/uuuu").withResolverStyle(ResolverStyle.STRICT);
 
-    boolean ACCEPT_ISO_FALLBACK = true;
+    boolean ACCEPT_ISO_FALLBACK = false;
 
     String FORMAT_MESSAGE = "date must be in dd/MM/yyyy format";
 
