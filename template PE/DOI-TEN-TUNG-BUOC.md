@@ -53,10 +53,43 @@ lúc flush thì lỗi bay ra từ tầng persistence → handler trả **500/0**
 
 ---
 
+## NGUYÊN TẮC SỐ 0 — MÃ HTTP KHÔNG CỐ ĐỊNH GIỮA CÁC ĐỀ
+
+> **Đề Trial và PE1 dùng `400` cho mọi lỗi. Đề SU26 PE1 (Room/Reservation) dùng `406` / `226` / `404` / `400`.**
+> Template mặc định `400` cho tất cả. **Không đổi = sai HTTP code ở gần như MỌI DÒNG của MỌI bảng
+> Response Behavior**, dù logic đúng hết.
+
+Việc đầu tiên khi mở đề: nhìn cột **HTTP Code** của bảng Response Behavior, điền vào `gen-all.ps1`:
+
+```powershell
+$HttpValidation = 406   # status 2
+$HttpDuplicate  = 226   # status 3
+$HttpNotFound   = 404   # status 4
+$HttpBusiness   = 400   # status 5 - nhánh nghiệp vụ riêng của đề
+$HttpError      = 500   # status 0
+```
+
+rồi `powershell -ExecutionPolicy Bypass -File .\gen-all.ps1 -HttpOnly`.
+
+Script ghi thẳng vào 5 hằng số đầu `common/GlobalExceptionHandler.java` của **cả hai** service.
+Trong file đó **không có** `HttpStatus.XXX` nào rải rác ở dưới — mọi handler đều trỏ về 5 hằng số này,
+nên không có chuyện sửa sót một chỗ.
+
+**Status 5 trở lên**: đề SU26 PE1 có thêm dòng `400 / status 5 — "Room is not AVAILABLE for reservation"`.
+Template có sẵn `common/BusinessRuleException.java` cho việc này — ném nó ra từ service, handler tự map.
+Đề nào không có status 5 thì để nguyên, class thừa vô hại (hoặc xoá).
+
+---
+
 ## BƯỚC 0 — ĐỌC ĐỀ, ĐIỀN BẢNG NÀY (5 phút đầu, chưa gõ code)
 
 | # | Câu hỏi với đề | Template đang là | Đề Trial (ví dụ) | ĐỀ THẬT (điền) |
 |---|---|---|---|---|
+| 0a | **HTTP code cho status 2 / 3 / 4 / 0?** | 400/400/400/500 | 400/400/400/500 | ______ |
+| 0b | **Có status 5 trở lên không? Nhánh nào?** | không | không | ______ |
+| 0c | **Field nào là COMPUTED (server tự tính)?** | không | không | ______ |
+| 0d | **Ràng buộc CHÉO SERVICE nào?** (field bên Detail so với field của Master lấy qua Feign) | không | không | ______ |
+| 0e | **Message của nhánh validation: câu cố định hay chi tiết từng field?** | chi tiết | — | ______ |
 | 1 | Entity phía **1** (bị gọi qua Feign)? | `Master` | `Restaurant` | ______ |
 | 2 | Entity phía **N** (đi gọi Feign)? | `Detail` | `Food` | ______ |
 | 3 | Có entity **phụ** không? | `Category` | `Category` | ______ |
@@ -70,9 +103,12 @@ lúc flush thì lỗi bay ra từ tầng persistence → handler trả **500/0**
 | 11 | Số nhiều có bất quy tắc không? | — | `Category`→`categories` | ______ |
 | 12 | Format ngày trong sample JSON? | `dd/MM/yyyy` | `20/05/2025` = dd/MM/yyyy | ______ |
 | 13 | Enum status? | ACTIVE/INACTIVE | ACTIVE/INACTIVE | ______ |
+| 13b | **Status lúc CREATE / lúc DELETE?** Quy tắc đúng cho cả 4 đề đã gặp: **phần tử ĐẦU** của `$…Status` = create, **phần tử CUỐI** = delete. gen-from-entity tự patch cả 2 chỗ; đề nào lệch thì truyền `-StatusOnCreate` / `-StatusOnDelete`. | ACTIVE / INACTIVE | ACTIVE / INACTIVE | ______ |
 | 14 | Bảng status code của đề? | 1/2/3/4/0 | 1/2/3/4/0 | ______ |
 | 15 | ApiResponse có field nào? | status, message, data | y vậy | ______ |
 | 16 | Phía Detail dùng PageDTO hay DTO list riêng? | `DetailListDTO` riêng | `FoodListDTO` riêng | ______ |
+| 16c | **Đề có câu "PageDTO: See the definition in ... section" không?** Có → **XOÁ** `DetailListDTO`, copy `PageDTO` sang, dùng chung 2 service (đề SU26 PE1). Không → giữ DTO riêng. | DTO riêng | DTO riêng | ______ |
+| 16d | **GET detail và GET list trả DTO NÀO?** Đề SU26 PE1: create/update trả DTO **phẳng**, get-by-id và list trả DTO **nested** — 4 endpoint 2 loại DTO khác nhau. | phẳng / nested | y vậy | ______ |
 | 16b | **Shape DTO Detail: A / B / C?** (nhìn bảng DTO: có `masterId` phẳng? có object nested? list dùng DTO riêng?) | B | B (DTO phẳng + FoodResponseDTO nested cho list) | ______ |
 | 17 | Liệt kê **mọi CHECK constraint** trong script SQL? | — | status IN (...) | ______ |
 | 18 | Query param list: cái nào **Enum**, cái nào partial? | name/ownerName partial | y vậy | ______ |
@@ -345,6 +381,112 @@ Grading Policies = 0 điểm) → xóa `target/`, `.idea/`, `*.iml` → zip **ng
 
 Việc còn lại làm tay: **giải nén thử 1 zip ra chỗ khác, mở IntelliJ, Maven reload, chạy được rồi mới nộp.**
 Nộp 3 zip riêng hay 1 zip tổng: đọc submit guideline đính kèm đề thật.
+
+## SỔ TAY LỖI THỰC CHIẾN 28/07 (đề SU26 PE1 — Room/Reservation) — ĐỌC TRƯỚC KHI THI
+
+Bài làm thật hôm 28/07 chạy qua bộ 101 test tự chấm chỉ đạt **85%**, và 3 trong 10 endpoint hỏng nặng.
+Điều đáng sợ nhất: **cả 3 endpoint hỏng đều không hề báo lỗi lúc chạy** — app lên bình thường,
+Swagger đẹp, chỉ khác cái là trả sai thứ. Dưới đây là đúng 5 nguyên nhân.
+
+### 1. Coi field COMPUTED là input bắt buộc → chết cả endpoint
+
+Đề: `totalAmount | BigDecimal | Computed = pricePerNight × number of nights`.
+Bài làm để `@NotNull(message = "totalAmount is required", groups = OnCreate.class)`.
+
+Hậu quả dây chuyền: **mọi** request create đúng đặc tả (không gửi `totalAmount`) đều bị `406`.
+Endpoint create chết → hai nhánh `404/4` (room không tồn tại) và `400/5` (room không AVAILABLE)
+**không bao giờ chạm tới được** → mất luôn cả 3 dòng của bảng.
+
+> **Nhận diện**: cột Description ghi "Computed", "Calculated", "Generated", "System-generated"
+> → field đó **KHÔNG** có `@NotNull`, service tự set, và phải **ghi đè** giá trị client gửi lên
+> (đừng tin client). Xem `$MasterRules`/`$DetailRules` trong gen-all — phần này script **không sinh được**,
+> phải gõ tay vào ServiceImpl.
+
+Bẫy kèm theo: test "gửi `totalAmount` bậy → server phải tính lại" và "đổi ngày → phải tính lại".
+
+### 2. `java.util.Date.getDay()` là THỨ TRONG TUẦN, không phải ngày trong tháng
+
+```java
+// SAI - getDay() tra 0..6 (Sun..Sat)
+int number = dto.getCheckOutDate().getDay() - dto.getCheckInDate().getDay();
+int total  = number * room.getPricePerNight().intValue();   // bien nay khong duoc dung
+dto.setTotalAmount(BigDecimal.valueOf(number));             // gan SO DEM, khong phai tien
+```
+`01/08/2026` (thứ 7 → 6) và `05/08/2026` (thứ 4 → 3) ra `-3`. Số âm vi phạm `CK_Reservations_Amount`
+→ DB chặn → `406` thay vì `201`.
+
+```java
+// DUNG
+long nights = ChronoUnit.DAYS.between(
+        DateOnlySerializer.toLocalDate(checkInDate),
+        DateOnlySerializer.toLocalDate(checkOutDate));
+entity.setTotalAmount(room.getPricePerNight().multiply(BigDecimal.valueOf(nights)));
+```
+`toLocalDate` trong `DateOnlySerializer` đã xử lý sẵn bẫy `java.sql.Date` — **nhớ đổi nó thành `public`**
+khi gọi từ package `service.impl`.
+
+### 3. Giữ `DetailListDTO` của template khi đề nói dùng chung PageDTO
+
+Đề ghi đúng một dòng: *"PageDTO: See the definition in Room Service section."*
+Bài làm giữ nguyên `ReservationListDTO` (`pageSize`/`pageNo`/`reservations`, **thiếu hẳn `totalElements`**).
+
+JSON trả về sai 3 tên field + thiếu 1 field, dù dữ liệu hoàn toàn đúng. Sửa: copy `PageDTO.java` từ
+project Master sang, **xoá** file ListDTO, đổi kiểu trả về ở interface + impl + controller.
+
+### 4. Bốn endpoint, hai loại DTO — trả nhầm loại
+
+| Endpoint | DTO đúng |
+|---|---|
+| POST create | `ReservationDTO` — **phẳng**, có `roomId` |
+| PUT update | `ReservationDTO` — **phẳng** |
+| GET /{id} | `ReservationDetailDTO` — **nested**, có `room`, KHÔNG có `roomId` |
+| GET list | `ReservationDetailDTO` trong `content` |
+
+Bài làm để `getById()` trả `ReservationDTO`. Tệ hơn: mapper có sẵn overload
+`toDTO(Reservation entity, RoomDTO room)` **nhận tham số `room` rồi vứt đi không dùng** — gọi Feign
+tốn công mà dữ liệu bị bỏ. Và `toResponseDTO()` **quên `dto.setStatus(...)`** → mọi row trong list
+có `"status": null`.
+
+> **Phản xạ**: sau khi sửa mapper, đếm số `dto.setXxx(...)` và so với số field của DTO đích.
+> Thiếu một dòng là mất một field, không có lỗi compile nào báo cho bạn.
+
+### 5. `@Min` / `@Max` / `@DecimalMin` quên `groups` → KHÔNG BAO GIỜ CHẠY
+
+```java
+@NotNull(message = "capacity is required", groups = OnCreate.class)
+@Min(1)     // <- thuoc group Default -> @Validated(OnCreate.class) BO QUA
+@Max(10)    // <- y het
+private Integer capacity;
+```
+Đây là lỗi im lặng nhất trong cả template: annotation nằm đó, đọc code thấy đủ, nhưng không chạy.
+Nó chỉ *tình cờ* không mất điểm vì CHECK constraint dưới DB chặn lại rồi
+`DataIntegrityViolationException` → cùng mã. Đừng dựa vào may mắn đó: đề nào có rule chỉ nằm trong
+**doc** mà không có CHECK trong SQL (ví dụ `numberOfGuests` "Must be >= 1 and <= 10" trong khi SQL chỉ
+`>= 1`) thì giá trị `99` **lọt thẳng vào DB**.
+
+> **Phản xạ soát**: `grep -n "@Min\|@Max\|@DecimalMin\|@Digits\|@Pattern\|@Size\|@Email" dto/*.java`
+> — dòng nào không có chữ `groups` là dòng chết. gen-from-entity sinh đúng, chỉ khi **sửa tay** mới sót.
+
+### 6. `@NotBlank` chỉ ở `OnCreate` → PUT ghi đè được chuỗi rỗng
+
+`PUT {"roomNumber": ""}` đi qua sạch (`@Size(max=20)` chấp nhận rỗng, DB chỉ cấm NULL chứ không cấm `""`)
+→ ghi đè `room_number` thành rỗng, trả `200/1`. Không thể vá bằng `@NotBlank(groups = OnUpdate.class)`
+vì `@NotBlank` **từ chối null**, mà null chính là "field không gửi" của partial update.
+
+```java
+@NotBlank(message = "roomNumber is required", groups = OnCreate.class)
+@Size(max = 20, groups = {OnCreate.class, OnUpdate.class})
+@Pattern(regexp = ".*\\S.*", message = "roomNumber must not be blank", groups = OnUpdate.class)
+```
+`@Pattern` **bỏ qua null** nhưng chặn rỗng/toàn khoảng trắng — đúng thứ cần cho PUT.
+
+### 7. Query param khai kiểu `Enum` mà chỉ validate một cái
+
+Đề SU26 PE1 có **hai** param Enum ở `GET /api/rooms`: `roomType` và `status`. Bài làm chỉ validate
+`status` → `?roomType=BOGUS` trả `200` rỗng thay vì `406/2`. Đếm lại bảng Query Parameters,
+mỗi dòng ghi `Enum` phải có đúng một danh sách `ALLOWED_*` tương ứng trong `list()`.
+
+---
 
 ## SỔ TAY LỖI THỰC CHIẾN 27/07 (đề Department/Employee) — ĐỌC TRƯỚC KHI THI
 
