@@ -18,8 +18,9 @@ param(
 $ErrorActionPreference = 'Stop'
 if (-not (Test-Path $Root)) { Write-Host "LOI: khong thay $Root" -ForegroundColor Red; exit 1 }
 
-$projects = Get-ChildItem $Root -Directory | Where-Object { $_.Name -match '^SE193114\w+$' }
-if ($projects.Count -eq 0) { Write-Host "LOI: khong thay project SE193114* nao trong $Root" -ForegroundColor Red; exit 1 }
+$Sid = Get-StudentId $Root
+$projects = Get-ChildItem $Root -Directory | Where-Object { $_.Name -match ('^' + [regex]::Escape($Sid) + '\w+$') }
+if ($projects.Count -eq 0) { Write-Host "LOI: khong thay project $Sid* nao trong $Root" -ForegroundColor Red; exit 1 }
 
 # 1) Kiem tra properties truoc khi nop (muc 3 Grading Policies: sai = 0 diem)
 $warn = 0
@@ -66,7 +67,7 @@ foreach ($p in $projects) {
 
 # 4) Goi 1 zip tong neu can
 if ($Bundle) {
-    $big = Join-Path $submitDir 'SE193114_ALL.zip'
+    $big = Join-Path $submitDir "${Sid}_ALL.zip"
     Compress-Archive -Path $zips -DestinationPath $big -Force
     Write-Host ("  + " + $big + "  (nop file nay neu EOS chi cho 1 file)") -ForegroundColor Green
 }

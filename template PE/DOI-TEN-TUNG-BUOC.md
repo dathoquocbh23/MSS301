@@ -95,6 +95,7 @@ Template có sẵn `common/BusinessRuleException.java` cho việc này — ném 
 | 3 | Có entity **phụ** không? | `Category` | `Category` | ______ |
 | 4 | Tên project gateway (phần sau MSSV)? | `Gateway` | `FoodyGateway` | ______ |
 | 5 | MSSV viết hoa/thường thế nào? | `SE193114` / `se193114` | y vậy | ______ |
+| 5b | **Đổi MSSV**: sửa `$StudentIdNew` trong `rename-template.ps1` — **đúng một chỗ**. Script tự lo cả 3 kiểu viết (`SE193114` tên project/artifactId/Controller · `se193114` package · `Se193114` class Application) cho cả tên thư mục, tên file và nội dung. 5 script còn lại tự dò MSSV từ tên thư mục trong `$Root`, không phải sửa gì thêm. | `SE193114` | — | ______ |
 | 6 | Port Master / Detail / Gateway? | 8081 / 8082 / 8080 | 8081 / 8082 / 8080 | ______ |
 | 7 | Tên database? | `MSS301_2026_PE` | `MSS301_2026_PE` | ______ |
 | 8 | username / password datasource? | sa / sa | sa / sa | ______ |

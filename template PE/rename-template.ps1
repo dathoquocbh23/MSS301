@@ -9,6 +9,14 @@
 
 $Src        = $PSScriptRoot                                        # folder "template PE" (tu nhan)
 $Dest       = "e:\fpt_university\Semester8\MSS301\PE\EXAM"     # folder bai lam moi
+
+# MSSV cua ban, VIET HOA. Doi o DUNG MOT CHO NAY, script tu xu ly ca 3 kieu viet:
+#   SE193114  -> ten project/folder, artifactId, ten class Controller   (de: <StudentID>RoomController)
+#   se193114  -> ten package                                            (de: <studentId> in LOWER CASE)
+#   Se193114  -> ten class Application (Spring Initializr sinh kieu nay)
+# Cac script khac (gen-all, gen-from-entity, gen-http, zip-submit) TU DO MSSV tu ten
+# thu muc trong $Dest -> khong phai sua gi them o do.
+$StudentIdNew = "SE193114"
 $MasterNew  = "Room"        # ten thay cho Master  (Viet Hoa Dau, dung chinh ta de)
 $DetailNew  = "Reservation"       # ten thay cho Detail  (Viet Hoa Dau)
 $CategoryNew = "Category"     # ten entity phu theo de (chi co nghia khi $HasCategory = $true)
@@ -225,10 +233,56 @@ foreach ($pair in @(@{ f = $propMaster; p = $PortMaster }, @{ f = $propDetail; p
 }
 Set-Prop $propGw 'server.port' $PortGateway
 
+# 4d) DOI MSSV - phai chay SAU 4c vi 4c con dung duong dan theo MSSV cu.
+#     Ba kieu viet phai doi rieng, KHONG dung -replace khong phan biet hoa thuong:
+#       SE193114MasterService  -> ten folder / artifactId / ten class Controller
+#       fu.se193114.master     -> package (de bat buoc lower case)
+#       Se193114MasterServiceApplication -> ten class Application
+$TemplateSid = 'SE193114'
+$sidUpperOld = $TemplateSid.ToUpper()
+$sidLowerOld = $TemplateSid.ToLower()
+$sidPascalOld = $TemplateSid.Substring(0, 1).ToUpper() + $TemplateSid.Substring(1).ToLower()
+
+$sidUpperNew = $StudentIdNew.ToUpper()
+$sidLowerNew = $StudentIdNew.ToLower()
+$sidPascalNew = $StudentIdNew.Substring(0, 1).ToUpper() + $StudentIdNew.Substring(1).ToLower()
+
+if ($sidUpperNew -cne $sidUpperOld) {
+
+    # noi dung file
+    $sidExts = '.java', '.xml', '.properties', '.sql', '.md', '.http', '.json'
+    Get-ChildItem $Dest -Recurse -File | Where-Object { $sidExts -contains $_.Extension } | ForEach-Object {
+        $t = [System.IO.File]::ReadAllText($_.FullName)
+        $new = $t.Replace($sidUpperOld, $sidUpperNew).
+                  Replace($sidPascalOld, $sidPascalNew).
+                  Replace($sidLowerOld, $sidLowerNew)
+        if ($new -cne $t) { [System.IO.File]::WriteAllText($_.FullName, $new) }
+    }
+
+    # ten THU MUC - sau nhat truoc de khong hong path cha
+    Get-ChildItem $Dest -Recurse -Directory | Sort-Object { $_.FullName.Length } -Descending | ForEach-Object {
+        $n = $_.Name.Replace($sidUpperOld, $sidUpperNew).
+                     Replace($sidPascalOld, $sidPascalNew).
+                     Replace($sidLowerOld, $sidLowerNew)
+        if ($n -cne $_.Name) { Rename-Item $_.FullName $n }
+    }
+
+    # ten FILE
+    Get-ChildItem $Dest -Recurse -File | ForEach-Object {
+        $n = $_.Name.Replace($sidUpperOld, $sidUpperNew).
+                     Replace($sidPascalOld, $sidPascalNew).
+                     Replace($sidLowerOld, $sidLowerNew)
+        if ($n -cne $_.Name) { Rename-Item $_.FullName $n }
+    }
+
+    Write-Host ""
+    Write-Host "DA DOI MSSV: $sidUpperOld -> $sidUpperNew  (package: $sidLowerNew, class App: $sidPascalNew)" -ForegroundColor Cyan
+}
+
 # 5) Bao cao + nhac viec script KHONG lam duoc
 Write-Host ""
 Write-Host "XONG. Bai lam o: $Dest" -ForegroundColor Green
-Write-Host "  SE193114${MasterNew}Service (8081) | SE193114${DetailNew}Service (8082) | SE193114$GatewayNew (8080)"
+Write-Host "  ${sidUpperNew}${MasterNew}Service (8081) | ${sidUpperNew}${DetailNew}Service (8082) | ${sidUpperNew}$GatewayNew (8080)"
 if ($HasCategory) { Write-Host "  URL: /api/$MasterPlural  /api/$DetailPlural  /api/$CategoryPlural" }
 else { Write-Host "  URL: /api/$MasterPlural  /api/$DetailPlural  (da don sach code Category)" }
 Write-Host ""

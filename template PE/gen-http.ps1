@@ -40,8 +40,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$SidUpper = 'SE193114'
-$SidLower = 'se193114'
+$SidUpper = Get-StudentId $Root
+$SidLower = $SidUpper.ToLower()
 
 if (-not (Test-Path $Root)) { Write-Host "LOI: khong thay $Root" -ForegroundColor Red; exit 1 }
 

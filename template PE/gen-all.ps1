@@ -75,6 +75,16 @@ $ErrorActionPreference = 'Stop'
 $gen = Join-Path $PSScriptRoot 'gen-from-entity.ps1'
 $ok = 0; $skip = 0; $fail = 0
 
+# --- Tu do MSSV tu ten thu muc project trong $Root (vd SE193114RoomService -> SE193114).
+#     Nho vay doi MSSV chi phai sua o rename-template.ps1, khong phai sua file nay.
+function Get-StudentId([string]$root) {
+    $d = Get-ChildItem $root -Directory -ErrorAction SilentlyContinue |
+         Where-Object { $_.Name -match '^[A-Za-z]{2,4}[0-9]{5,}' } |
+         Select-Object -First 1
+    if ($d -and $d.Name -match '^([A-Za-z]{2,4}[0-9]{5,})') { return $Matches[1] }
+    return 'SE193114'
+}
+
 # ---------------------------------------------------------------- bang ma HTTP
 
 $HttpStatusName = @{
@@ -156,7 +166,8 @@ function Set-HttpCodes {
 function Invoke-Gen([string]$svc, [string]$entity, [string]$ren, [string]$flt, [string]$uniq, [string]$status, [string]$shape, $rules) {
     $entityName = $entity
     if ($entityName -eq '') { $entityName = $svc }
-    $file = Join-Path $Root "SE193114${svc}Service\src\main\java\fu\se193114\$($svc.ToLower())\entity\$entityName.java"
+    $sid = Get-StudentId $Root
+    $file = Join-Path $Root "$sid${svc}Service\src\main\java\fu\$($sid.ToLower())\$($svc.ToLower())\entity\$entityName.java"
     if (-not (Test-Path $file)) {
         Write-Host "BO QUA $entityName - chua dan entity vao $file" -ForegroundColor Yellow
         Write-Host '        (IntelliJ generate tu DB, dan vao do, chay lai file nay)' -ForegroundColor Yellow

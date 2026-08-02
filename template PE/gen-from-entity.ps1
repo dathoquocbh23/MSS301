@@ -49,8 +49,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$SidUpper = 'SE193114'
-$SidLower = 'se193114'
+$SidUpper = Get-StudentId $Root
+$SidLower = $SidUpper.ToLower()
 
 if ([string]::IsNullOrEmpty($EntityName)) { $EntityName = $Service }
 $svcLower = $Service.ToLower()

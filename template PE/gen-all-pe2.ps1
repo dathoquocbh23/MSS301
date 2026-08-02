@@ -52,7 +52,8 @@ $ok = 0; $skip = 0; $fail = 0
 function Invoke-Gen([string]$svc, [string]$entity, [string]$ren, [string]$flt, [string]$uniq, [string]$status, [string]$shape, $rules) {
     $entityName = $entity
     if ($entityName -eq '') { $entityName = $svc }
-    $file = Join-Path $Root "SE193114${svc}Service\src\main\java\fu\se193114\$($svc.ToLower())\entity\$entityName.java"
+    $sid = Get-StudentId $Root
+    $file = Join-Path $Root "$sid${svc}Service\src\main\java\fu\$($sid.ToLower())\$($svc.ToLower())\entity\$entityName.java"
     if (-not (Test-Path $file)) {
         Write-Host "BO QUA $entityName - chua dan entity vao $file" -ForegroundColor Yellow
         Write-Host '        (IntelliJ generate tu DB, dan vao do, chay lai file nay)' -ForegroundColor Yellow
