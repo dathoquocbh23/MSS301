@@ -1,7 +1,7 @@
 package fu.se193114.detail.service;
 
 import fu.se193114.detail.dto.DetailDTO;
-import fu.se193114.detail.dto.PageDTO;
+import fu.se193114.detail.dto.DetailListDTO;
 
 public interface DetailService {
 
@@ -11,7 +11,7 @@ public interface DetailService {
 
     DetailDTO getById(Long detailId);
 
-    void delete(Long detailId);
+    void deactivate(Long detailId);
 
-    PageDTO list(int page, int size, String name, String status);
+    DetailListDTO list(Integer page, Integer size, String name, String ingredients);
 }

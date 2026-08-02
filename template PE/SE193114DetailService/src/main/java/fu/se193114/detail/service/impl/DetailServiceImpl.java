@@ -5,9 +5,10 @@ import fu.se193114.detail.common.DetailMapper;
 import fu.se193114.detail.common.NotFoundException;
 import fu.se193114.detail.common.ValidationException;
 import fu.se193114.detail.dto.DetailDTO;
+import fu.se193114.detail.dto.DetailListDTO;
+import fu.se193114.detail.dto.DetailResponseDTO;
 import fu.se193114.detail.dto.MasterApiResponse;
 import fu.se193114.detail.dto.MasterDTO;
-import fu.se193114.detail.dto.PageDTO;
 import fu.se193114.detail.entity.Detail;
 import fu.se193114.detail.repository.DetailRepository;
 import fu.se193114.detail.repository.MasterClient;
@@ -16,78 +17,105 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Slf4j
 @Service
 public class DetailServiceImpl implements DetailService {
 
-    // Enum THEO DE — moi de moi khac!
-    private static final List<String> VALID_STATUSES = List.of("ACTIVE", "INACTIVE");
+    private static final int DEFAULT_PAGE_SIZE = 10;
+    private static final int MAX_PAGE_SIZE = 100;
+    private static final boolean SIZE_OVER_MAX_IS_ERROR = true;
 
-    private final DetailRepository detailRepository;
+    private final DetailRepository repository;
     private final MasterClient masterClient;
 
-    public DetailServiceImpl(DetailRepository detailRepository, MasterClient masterClient) {
-        this.detailRepository = detailRepository;
+    public DetailServiceImpl(DetailRepository repository, MasterClient masterClient) {
+        this.repository = repository;
         this.masterClient = masterClient;
     }
 
     @Override
     public DetailDTO create(DetailDTO dto) {
+        log.info("Creating detail");
+
         Long masterId = resolveMasterId(dto);
-        log.info("Creating detail name={} masterId={}", dto.getName(), masterId);
         if (masterId == null) {
             throw new ValidationException("masterId is required");
         }
-        // Feign verify: masterId phai ton tai ben MasterService
         MasterDTO master = fetchMasterOrThrow(masterId);
 
         Detail entity = DetailMapper.toEntity(dto);
+        entity.setDetailId(null);
         entity.setMasterId(masterId);
         entity.setStatus("ACTIVE");
-        entity = detailRepository.save(entity);
 
-        return DetailMapper.toDTO(entity, master);
+        return DetailMapper.toDTO(repository.save(entity), master);
     }
 
     @Override
     public DetailDTO update(Long detailId, DetailDTO dto) {
         log.info("Updating detail id={}", detailId);
-        Detail entity = detailRepository.findById(detailId)
-                .orElseThrow(() -> {
-                    log.warn("Detail not found id={}", detailId);
-                    return new NotFoundException("Detail is not found");
-                });
-
-        validateForUpdate(dto);
+        Detail entity = findOrThrow(detailId, "Detail Id is not found");
 
         Long masterId = resolveMasterId(dto);
-        MasterDTO master = null;
         if (masterId != null) {
-            master = fetchMasterOrThrow(masterId);
+            fetchMasterOrThrow(masterId);
         }
 
         DetailMapper.applyPartialUpdate(entity, dto);
         if (masterId != null) {
             entity.setMasterId(masterId);
         }
-        entity = detailRepository.save(entity);
-
-        if (master == null && entity.getMasterId() != null) {
-            master = fetchMasterSafe(entity.getMasterId());
-        }
-
-        return DetailMapper.toDTO(entity, master);
+        Detail saved = repository.save(entity);
+        return DetailMapper.toDTO(saved, fetchMasterOrNull(saved.getMasterId()));
     }
 
-    /**
-     * Lay masterId tu field phang (masterId) hoac tu object nested (master.masterId),
-     * uu tien field phang.
-     */
+    @Override
+    public DetailDTO getById(Long detailId) {
+        log.info("Getting detail id={}", detailId);
+        Detail entity = findOrThrow(detailId, "Detail is not found");
+        return DetailMapper.toDTO(entity, fetchMasterOrNull(entity.getMasterId()));
+    }
+
+    @Override
+    public void deactivate(Long detailId) {
+        log.info("Deactivating detail id={}", detailId);
+        Detail entity = findOrThrow(detailId, "Detail is not found");
+        entity.setStatus("INACTIVE");
+        repository.save(entity);
+    }
+
+    @Override
+    public DetailListDTO list(Integer page, Integer size, String name, String ingredients) {
+        log.info("Listing details page={} size={} name={} ingredients={}", page, size, name, ingredients);
+
+        int pageNumber = page == null ? 0 : page;
+        int pageSize = size == null ? DEFAULT_PAGE_SIZE : size;
+        if (pageNumber < 0 || pageSize < 1 || (SIZE_OVER_MAX_IS_ERROR && pageSize > MAX_PAGE_SIZE)) {
+            throw new ValidationException("Data validation failed");
+        }
+        pageSize = Math.min(pageSize, MAX_PAGE_SIZE);
+
+        Pageable pageable = PageRequest.of(pageNumber, pageSize);
+        Page<Detail> result = repository.search(blankToNull(name), blankToNull(ingredients), pageable);
+
+        List<DetailResponseDTO> content = new ArrayList<>();
+        for (Detail entity : result.getContent()) {
+            content.add(DetailMapper.toResponseDTO(entity, fetchMasterOrNull(entity.getMasterId())));
+        }
+
+        return new DetailListDTO(result.getSize(), result.getNumber(), result.getTotalPages(),
+                result.isFirst(), result.isLast(), content);
+    }
+
+    private Detail findOrThrow(Long detailId, String message) {
+        return repository.findById(detailId).orElseThrow(() -> new NotFoundException(message));
+    }
+
     private Long resolveMasterId(DetailDTO dto) {
         if (dto.getMasterId() != null) {
             return dto.getMasterId();
@@ -98,126 +126,32 @@ public class DetailServiceImpl implements DetailService {
         return null;
     }
 
-    @Override
-    public DetailDTO getById(Long detailId) {
-        log.info("Fetching detail id={}", detailId);
-        Detail entity = detailRepository.findById(detailId)
-                .orElseThrow(() -> {
-                    log.warn("Detail not found id={}", detailId);
-                    return new NotFoundException("Detail is not found");
-                });
-
-        MasterDTO master = fetchMasterSafe(entity.getMasterId());
-        return DetailMapper.toDTO(entity, master);
-    }
-
-    @Override
-    public void delete(Long detailId) {
-        log.info("Deactivating detail id={}", detailId);
-        Detail entity = detailRepository.findById(detailId)
-                .orElseThrow(() -> {
-                    log.warn("Detail not found id={}", detailId);
-                    return new NotFoundException("Detail is not found");
-                });
-        // Soft delete — doc de xem yeu cau xoa that hay doi status
-        entity.setStatus("INACTIVE");
-        detailRepository.save(entity);
-    }
-
-    @Override
-    public PageDTO list(int page, int size, String name, String status) {
-        log.info("Listing details page={} size={} name={} status={}", page, size, name, status);
-        if (page < 0) {
-            throw new ValidationException("page must be >= 0");
-        }
-        if (size <= 0 || size > 100) {
-            throw new ValidationException("size must be between 1 and 100");
-        }
-        if (status != null && !status.isBlank() && !VALID_STATUSES.contains(status)) {
-            throw new ValidationException("status must be one of ACTIVE, INACTIVE");
-        }
-
-        String normalizedName = (name == null || name.isBlank()) ? null : name.trim();
-        String normalizedStatus = (status == null || status.isBlank()) ? null : status;
-
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "detailId"));
-        Page<Detail> result = detailRepository.search(normalizedName, normalizedStatus, pageable);
-
-        // Nested master cho tung row (Feign per row) — doc de: co de chi can masterId phang!
-        List<DetailDTO> content = result.getContent().stream()
-                .map(d -> DetailMapper.toDTO(d, fetchMasterSafe(d.getMasterId())))
-                .toList();
-
-        return new PageDTO(
-                result.getSize(),
-                result.getNumber(),
-                result.getTotalPages(),
-                result.getTotalElements(),
-                result.isFirst(),
-                result.isLast(),
-                content
-        );
-    }
-
-    /**
-     * Dung cho create/update: master khong ton tai -> nem loi (message THEO DE).
-     */
     private MasterDTO fetchMasterOrThrow(Long masterId) {
-        if (masterId == null) {
-            throw new NotFoundException("Master ID is not found");
-        }
         try {
             MasterApiResponse response = masterClient.getMasterById(masterId);
             if (response == null || response.getData() == null) {
-                log.warn("Master lookup returned no data masterId={}", masterId);
-                throw new NotFoundException("Master ID is not found");
+                throw new NotFoundException("Master Id is not found");
             }
             return response.getData();
-        } catch (FeignException e) {
-            log.warn("Feign master lookup failed masterId={} message={}", masterId, e.getMessage());
-            throw new NotFoundException("Master ID is not found");
-        } catch (NotFoundException e) {
-            throw e;
-        } catch (Exception e) {
-            log.warn("Master lookup failed masterId={} message={}", masterId, e.getMessage());
-            throw new NotFoundException("Master ID is not found");
+        } catch (FeignException.NotFound | FeignException.BadRequest ex) {
+            throw new NotFoundException("Master Id is not found");
         }
     }
 
-    /**
-     * Dung cho get/list: loi Feign thi tra null (khong lam gay response chinh).
-     */
-    private MasterDTO fetchMasterSafe(Long masterId) {
+    private MasterDTO fetchMasterOrNull(Long masterId) {
         if (masterId == null) {
             return null;
         }
         try {
             MasterApiResponse response = masterClient.getMasterById(masterId);
             return response == null ? null : response.getData();
-        } catch (Exception e) {
-            log.warn("Master lookup failed masterId={} message={}", masterId, e.getMessage());
+        } catch (Exception ex) {
+            log.warn("Cannot fetch master id={}: {}", masterId, ex.getMessage());
             return null;
         }
     }
 
-    /**
-     * Validate tay cho partial update (vi @Valid tren body update se bat buoc
-     * ca field client khong gui). Sua rule + message THEO DE.
-     */
-    private void validateForUpdate(DetailDTO dto) {
-        if (dto.getName() != null) {
-            if (dto.getName().isBlank()) {
-                throw new ValidationException("name is required");
-            }
-            if (dto.getName().length() > 100) {
-                throw new ValidationException("name must be at most 100 characters");
-            }
-        }
-        if (dto.getDescription() != null && dto.getDescription().length() > 100) {
-            throw new ValidationException("description must be at most 100 characters");
-        }
-        if (dto.getStatus() != null && !VALID_STATUSES.contains(dto.getStatus())) {
-            throw new ValidationException("status must be one of ACTIVE, INACTIVE");
-        }
+    private String blankToNull(String value) {
+        return value == null || value.trim().isEmpty() ? null : value;
     }
 }

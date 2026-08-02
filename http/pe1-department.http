@@ -1,0 +1,208 @@
+### ============================================================
+###  PE1 — DepartmentService (/api/departments)
+###  Status map: 1=OK  2=validation  3=duplicate code  4=not found  0=500
+###  Not-found trả HTTP 400 (không phải 404) theo đề.
+###
+###  CHẠY reset-test-data.sql TRƯỚC MỖI LẦN CHẠY FULL BỘ TEST:
+###    sqlcmd -S localhost -U sa -P 12345 -d MSS301_2026_PE -i reset-test-data.sql
+###  Seed sau reset — các test dưới bám vào đúng id/code này:
+###    id1=HQ01 Head Quarter | id2=FIN01 Finance | id3=OPS01 Operations
+###    id4=MKT01 Marketing   | id5=IT01 IT Department   (tất cả ACTIVE)
+###  Code dùng để CREATE (QA01/QA02/QA03...) không có trong seed → chạy lại
+###  sau khi reset luôn sạch. Không reset mà chạy lần 2 thì 01/02 sẽ ra 400/3.
+### ============================================================
+
+### 01. Create department — hợp lệ
+# Expect: 201, status=1, data.status="ACTIVE" (service ép), effectiveDate trả dd/MM/yyyy
+POST {{masterUrl}}/api/departments
+Content-Type: application/json
+
+{
+  "code": "QA01",
+  "name": "QA Department",
+  "location": "Hoa Lac Park",
+  "effectiveDate": "01/08/2026",
+  "parentId": 1
+}
+
+### 02. Create — effectiveDate dạng ISO cũng phải được nhận (deserializer fallback)
+# Expect: 201, status=1, response trả "15/08/2026"
+POST {{masterUrl}}/api/departments
+Content-Type: application/json
+
+{
+  "code": "QA02",
+  "name": "QA Department 2",
+  "location": "Q9 Campus",
+  "effectiveDate": "2026-08-15",
+  "parentId": 1
+}
+
+### 03. Create — trùng code (HQ01 đã có sẵn từ seed id1)
+# Expect: 400, status=3, "Department code already exists..."
+POST {{masterUrl}}/api/departments
+Content-Type: application/json
+
+{
+  "code": "HQ01",
+  "name": "Duplicate Test"
+}
+
+### 04. Create — thiếu code + name (bean validation OnCreate)
+# Expect: 400, status=2
+POST {{masterUrl}}/api/departments
+Content-Type: application/json
+
+{
+  "location": "Nowhere"
+}
+
+### 05. Create — code có ký tự đặc biệt (phải ^[A-Za-z0-9]+$)
+# Expect: 400, status=2
+POST {{masterUrl}}/api/departments
+Content-Type: application/json
+
+{
+  "code": "AB-01!",
+  "name": "Bad Code Dept"
+}
+
+### 06. Create — code quá 10 ký tự
+# Expect: 400, status=2
+POST {{masterUrl}}/api/departments
+Content-Type: application/json
+
+{
+  "code": "ABCDEFGHIJK",
+  "name": "Long Code Dept"
+}
+
+### 07. Create — effectiveDate đúng biên dưới 01/01/2000 (phải AFTER → bị từ chối)
+# Expect: 400, status=2
+POST {{masterUrl}}/api/departments
+Content-Type: application/json
+
+{
+  "code": "QA03",
+  "name": "Boundary Low",
+  "effectiveDate": "01/01/2000"
+}
+
+### 08. Create — effectiveDate quá xa (vượt today+360)
+# Expect: 400, status=2
+POST {{masterUrl}}/api/departments
+Content-Type: application/json
+
+{
+  "code": "QA04",
+  "name": "Boundary High",
+  "effectiveDate": "01/01/2030"
+}
+
+### 09. Create — effectiveDate sai format hoàn toàn
+# Expect: 400, status=2 ("Request body is invalid")
+POST {{masterUrl}}/api/departments
+Content-Type: application/json
+
+{
+  "code": "QA05",
+  "name": "Bad Date Dept",
+  "effectiveDate": "not-a-date"
+}
+
+### 10. Get detail — id1 từ seed
+# Expect: 200, status=1, data.code="HQ01"
+GET {{masterUrl}}/api/departments/1
+
+### 11. Get detail — id không tồn tại
+# Expect: 400 (KHÔNG phải 404), status=4
+GET {{masterUrl}}/api/departments/99999
+
+### 12. Get detail — id sai kiểu
+# Expect: 400, status=2 ("departmentId has an invalid value")
+GET {{masterUrl}}/api/departments/abc
+
+### 13. Update — partial (chỉ đổi name, các field khác giữ nguyên)
+# Expect: 200, status=1, data.name đổi, code="FIN01"/location="HCM City" giữ nguyên
+PUT {{masterUrl}}/api/departments/2
+Content-Type: application/json
+
+{
+  "name": "Finance Department Renamed"
+}
+
+### 14. Update — đổi status hợp lệ (id4=MKT01)
+# Expect: 200, status=1, data.status="CLOSED"
+PUT {{masterUrl}}/api/departments/4
+Content-Type: application/json
+
+{
+  "status": "CLOSED"
+}
+
+### 15. Update — status ngoài enum ACTIVE|INACTIVE|CLOSED
+# Expect: 400, status=2
+PUT {{masterUrl}}/api/departments/2
+Content-Type: application/json
+
+{
+  "status": "DELETED"
+}
+
+### 16. Update — code trùng với department khác (IT01 đang thuộc id5)
+# Expect: 400, status=3
+PUT {{masterUrl}}/api/departments/2
+Content-Type: application/json
+
+{
+  "code": "IT01"
+}
+
+### 17. Update — id không tồn tại
+# Expect: 400, status=4
+PUT {{masterUrl}}/api/departments/99999
+Content-Type: application/json
+
+{
+  "name": "Ghost"
+}
+
+### 18. Deactivate (soft delete) — id3=OPS01
+# Expect: 200, status=1; chạy lại 10 với id=3 thấy status="INACTIVE", row vẫn còn
+DELETE {{masterUrl}}/api/departments/3
+
+### 19. Deactivate — id không tồn tại
+# Expect: 400, status=4
+DELETE {{masterUrl}}/api/departments/99999
+
+### 20. List — mặc định
+# Expect: 200, status=1, data là PageDTO {size,page,totalPages,totalElements,first,last,content}
+GET {{masterUrl}}/api/departments
+
+### 21. List — phân trang
+# Expect: 200, size=2, page=1
+GET {{masterUrl}}/api/departments?page=1&size=2
+
+### 22. List — filter name partial match
+# Expect: 200, content chỉ chứa department có "Department" trong name
+GET {{masterUrl}}/api/departments?name=Department
+
+### 23. List — filter status
+# Expect: 200, content toàn ACTIVE
+GET {{masterUrl}}/api/departments?status=ACTIVE
+
+### 24. List — status không hợp lệ
+# Expect: 400, status=2
+GET {{masterUrl}}/api/departments?status=BOGUS
+
+### 25. List — size vượt max 100
+# Expect: 400, status=2
+GET {{masterUrl}}/api/departments?size=101
+
+### 26. List — page âm
+# Expect: 400, status=2
+GET {{masterUrl}}/api/departments?page=-1
+
+### 27. List — page sai kiểu
+# Expect: 400, status=2
+GET {{masterUrl}}/api/departments?page=xyz

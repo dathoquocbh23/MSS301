@@ -1,0 +1,382 @@
+### ============================================================
+###  RESERVATION SERVICE (/api/reservations) - MSS301 SU26 PE1
+###  Chon env "gateway" (8080).
+###
+###  BANG MA CUA DE NAY:
+###    201 / status 1  create OK            200 / status 1  OK
+###    406 / status 2  validation failed
+###    404 / status 4  Room ID / Reservation ID is not found
+###    400 / status 5  Room is not AVAILABLE for reservation   <-- CHI CO O CREATE
+###    500 / status 0  internal error
+###  LUU Y: bang Response Behavior cua UPDATE KHONG co dong 400/5.
+###
+###  QUY TAC NGHIEP VU PHAI DUNG:
+###    - totalAmount = pricePerNight x SO DEM (ChronoUnit.DAYS giua 2 ngay). Server tu tinh,
+###      client gui gi cung bi ghi de.
+###    - numberOfGuests KHONG duoc vuot capacity cua room (goi RoomService lay capacity).
+###    - checkOutDate phai SAU checkInDate.
+###    - Ngay dung dd/MM/yyyy. GET /{id} va list tra ReservationDetailDTO (room NESTED).
+###      POST va PUT tra ReservationDTO (roomId PHANG).
+###
+###  Truoc khi chay: sql\seed_test_db.sql
+###    room 1 = A-101 DOUBLE 850000 capacity 2 AVAILABLE
+###    room 2 = A-102 SINGLE 500000 capacity 1 AVAILABLE
+###    room 3 = OCCUPIED, room 4 = MAINTENANCE
+###    reservation 1..5, guestName co "Nguyen Van An" va "Hoang Van An"
+### ============================================================
+
+
+### ---------- V5. GET /api/reservations - Get Reservation List ----------
+
+### V5.1 List mac dinh -> 200/1, PageDTO du 7 field
+# BAY LON: de ghi "PageDTO: See the definition in Room Service section" -> phai dung
+# size/page/totalPages/totalElements/first/last/content, KHONG duoc tu che DTO list rieng.
+# Expect: size=10, page=0, totalElements=5
+GET {{reservationUrl}}/api/reservations
+
+### V5.2 content phai la ReservationDetailDTO
+# Expect moi row: reservationId, guestName, guestEmail, guestPhone, checkInDate, checkOutDate,
+#                 numberOfGuests, totalAmount, status, room (NESTED)
+# KHONG duoc co roomId. status KHONG duoc null (bay: mapper quen setStatus).
+GET {{reservationUrl}}/api/reservations?size=1
+
+### V5.3 Ngay trong response dung dd/MM/yyyy
+GET {{reservationUrl}}/api/reservations?size=1
+
+### V5.4 Filter guestName partial match -> 2 row
+GET {{reservationUrl}}/api/reservations?guestName=van an
+
+### V5.5 guestName partial that su (khop giua chuoi) -> 4 row
+# "an" nam trong Tran, Van, Hoang -> LIKE %an% phai ra 4.
+GET {{reservationUrl}}/api/reservations?guestName=an
+
+### V5.6 guestName khong khop -> 200/1, totalElements=0
+# Neu tra du 5 row -> filter dang bi BO QUA (sai ten param).
+GET {{reservationUrl}}/api/reservations?guestName=zzzznomatch
+
+### V5.7 Filter status -> 2 row CONFIRMED
+GET {{reservationUrl}}/api/reservations?status=CONFIRMED
+
+### V5.8 status ngoai Enum -> 406/2
+GET {{reservationUrl}}/api/reservations?status=BOGUS
+
+### V5.9 size=101 -> 406/2
+GET {{reservationUrl}}/api/reservations?size=101
+
+### V5.10 size=0 -> 406/2
+GET {{reservationUrl}}/api/reservations?size=0
+
+### V5.11 page am -> 406/2
+GET {{reservationUrl}}/api/reservations?page=-1
+
+### V5.12 page sai kieu -> 406/2
+GET {{reservationUrl}}/api/reservations?page=xyz
+
+
+### ---------- V1. POST /api/reservations - Create Reservation ----------
+
+### V1.1 Create hop le -> 201/1, status=CONFIRMED, totalAmount = 850000 x 4 dem = 3400000
+POST {{reservationUrl}}/api/reservations
+Content-Type: application/json
+
+{
+  "guestName": "Test Guest",
+  "guestEmail": "guest@example.com",
+  "guestPhone": "0912345678",
+  "checkInDate": "01/08/2026",
+  "checkOutDate": "05/08/2026",
+  "numberOfGuests": 2,
+  "roomId": 1
+}
+
+> {% client.global.set("reservationId", response.body.data.reservationId); %}
+
+### V1.2 KHONG gui totalAmount van phai 201
+# BAY: dat @NotNull len totalAmount thi moi request dung dac ta deu bi 406.
+# Expect: 201/1, totalAmount = 500000 x 2 = 1000000
+POST {{reservationUrl}}/api/reservations
+Content-Type: application/json
+
+{
+  "guestName": "No Amount",
+  "guestEmail": "na@example.com",
+  "guestPhone": "0912345679",
+  "checkInDate": "10/08/2026",
+  "checkOutDate": "12/08/2026",
+  "numberOfGuests": 1,
+  "roomId": 2
+}
+
+### V1.3 Client gui totalAmount bay -> server phai TINH LAI
+# Expect: 201/1, totalAmount = 1000000 (KHONG phai 1)
+POST {{reservationUrl}}/api/reservations
+Content-Type: application/json
+
+{
+  "guestName": "Fake Amount",
+  "guestEmail": "fa@example.com",
+  "guestPhone": "0912345680",
+  "checkInDate": "10/08/2026",
+  "checkOutDate": "12/08/2026",
+  "numberOfGuests": 1,
+  "totalAmount": 1,
+  "roomId": 2
+}
+
+### V1.4 roomId khong ton tai -> 404/4 "Room ID is not found"
+POST {{reservationUrl}}/api/reservations
+Content-Type: application/json
+
+{
+  "guestName": "Ghost Room", "guestEmail": "gr@example.com", "guestPhone": "0912345681",
+  "checkInDate": "01/08/2026", "checkOutDate": "03/08/2026", "numberOfGuests": 1, "roomId": 999999
+}
+
+### V1.5 Room dang OCCUPIED -> 400/5 "Room is not AVAILABLE for reservation"
+POST {{reservationUrl}}/api/reservations
+Content-Type: application/json
+
+{
+  "guestName": "Occupied", "guestEmail": "oc@example.com", "guestPhone": "0912345682",
+  "checkInDate": "01/08/2026", "checkOutDate": "03/08/2026", "numberOfGuests": 1, "roomId": 3
+}
+
+### V1.6 Room dang MAINTENANCE -> 400/5
+# De ghi ro: "A room in MAINTENANCE cannot be reserved."
+POST {{reservationUrl}}/api/reservations
+Content-Type: application/json
+
+{
+  "guestName": "Maint", "guestEmail": "mt@example.com", "guestPhone": "0912345683",
+  "checkInDate": "01/08/2026", "checkOutDate": "03/08/2026", "numberOfGuests": 1, "roomId": 4
+}
+
+### V1.7 numberOfGuests VUOT capacity cua room -> 406/2
+# room 1 capacity = 2, gui 5 khach. "Must not exceed the room capacity".
+POST {{reservationUrl}}/api/reservations
+Content-Type: application/json
+
+{
+  "guestName": "Too Many", "guestEmail": "tm@example.com", "guestPhone": "0912345684",
+  "checkInDate": "01/08/2026", "checkOutDate": "03/08/2026", "numberOfGuests": 5, "roomId": 1
+}
+
+### V1.8 numberOfGuests = DUNG capacity -> 201/1 (bien tren hop le)
+POST {{reservationUrl}}/api/reservations
+Content-Type: application/json
+
+{
+  "guestName": "Exact Cap", "guestEmail": "ec@example.com", "guestPhone": "0912345685",
+  "checkInDate": "01/08/2026", "checkOutDate": "03/08/2026", "numberOfGuests": 2, "roomId": 1
+}
+
+### V1.9 checkOutDate = checkInDate -> 406/2 (CK_Reservations_Dates: phai LON HON)
+POST {{reservationUrl}}/api/reservations
+Content-Type: application/json
+
+{
+  "guestName": "Same Day", "guestEmail": "sd@example.com", "guestPhone": "0912345686",
+  "checkInDate": "01/08/2026", "checkOutDate": "01/08/2026", "numberOfGuests": 1, "roomId": 1
+}
+
+### V1.10 checkOutDate TRUOC checkInDate -> 406/2
+POST {{reservationUrl}}/api/reservations
+Content-Type: application/json
+
+{
+  "guestName": "Reverse", "guestEmail": "rv@example.com", "guestPhone": "0912345687",
+  "checkInDate": "05/08/2026", "checkOutDate": "01/08/2026", "numberOfGuests": 1, "roomId": 1
+}
+
+### V1.11 Ngay sai format (ISO) -> 406/2
+# De ghi ro "The accepted format dd/MM/yyyy" -> ISO phai bi tu choi.
+POST {{reservationUrl}}/api/reservations
+Content-Type: application/json
+
+{
+  "guestName": "Bad Fmt", "guestEmail": "bf@example.com", "guestPhone": "0912345688",
+  "checkInDate": "2026-08-01", "checkOutDate": "05/08/2026", "numberOfGuests": 1, "roomId": 1
+}
+
+### V1.12 Ngay khong ton tai (31/02) -> 406/2 (ResolverStyle.STRICT)
+POST {{reservationUrl}}/api/reservations
+Content-Type: application/json
+
+{
+  "guestName": "Bad Day", "guestEmail": "bd@example.com", "guestPhone": "0912345689",
+  "checkInDate": "31/02/2026", "checkOutDate": "05/08/2026", "numberOfGuests": 1, "roomId": 1
+}
+
+### V1.13 Thieu guestName -> 406/2
+POST {{reservationUrl}}/api/reservations
+Content-Type: application/json
+
+{ "guestEmail": "x@example.com", "guestPhone": "0912345690", "checkInDate": "01/08/2026", "checkOutDate": "03/08/2026", "numberOfGuests": 1, "roomId": 1 }
+
+### V1.14 Thieu guestEmail -> 406/2
+POST {{reservationUrl}}/api/reservations
+Content-Type: application/json
+
+{ "guestName": "No Mail", "guestPhone": "0912345691", "checkInDate": "01/08/2026", "checkOutDate": "03/08/2026", "numberOfGuests": 1, "roomId": 1 }
+
+### V1.15 Email sai format -> 406/2
+POST {{reservationUrl}}/api/reservations
+Content-Type: application/json
+
+{ "guestName": "Bad Mail", "guestEmail": "khong-phai-email", "guestPhone": "0912345692", "checkInDate": "01/08/2026", "checkOutDate": "03/08/2026", "numberOfGuests": 1, "roomId": 1 }
+
+### V1.16 Thieu guestPhone -> 406/2
+POST {{reservationUrl}}/api/reservations
+Content-Type: application/json
+
+{ "guestName": "No Phone", "guestEmail": "np@example.com", "checkInDate": "01/08/2026", "checkOutDate": "03/08/2026", "numberOfGuests": 1, "roomId": 1 }
+
+### V1.17 Thieu checkInDate -> 406/2
+POST {{reservationUrl}}/api/reservations
+Content-Type: application/json
+
+{ "guestName": "No In", "guestEmail": "ni@example.com", "guestPhone": "0912345693", "checkOutDate": "03/08/2026", "numberOfGuests": 1, "roomId": 1 }
+
+### V1.18 Thieu checkOutDate -> 406/2
+POST {{reservationUrl}}/api/reservations
+Content-Type: application/json
+
+{ "guestName": "No Out", "guestEmail": "no@example.com", "guestPhone": "0912345694", "checkInDate": "01/08/2026", "numberOfGuests": 1, "roomId": 1 }
+
+### V1.19 Thieu numberOfGuests -> 406/2
+POST {{reservationUrl}}/api/reservations
+Content-Type: application/json
+
+{ "guestName": "No Guests", "guestEmail": "ng@example.com", "guestPhone": "0912345695", "checkInDate": "01/08/2026", "checkOutDate": "03/08/2026", "roomId": 1 }
+
+### V1.20 numberOfGuests = 0 -> 406/2 (CK_Reservations_Guests: >= 1)
+POST {{reservationUrl}}/api/reservations
+Content-Type: application/json
+
+{ "guestName": "Zero", "guestEmail": "zr@example.com", "guestPhone": "0912345696", "checkInDate": "01/08/2026", "checkOutDate": "03/08/2026", "numberOfGuests": 0, "roomId": 1 }
+
+### V1.21 Thieu roomId -> 406/2
+POST {{reservationUrl}}/api/reservations
+Content-Type: application/json
+
+{ "guestName": "No Room", "guestEmail": "nr@example.com", "guestPhone": "0912345697", "checkInDate": "01/08/2026", "checkOutDate": "03/08/2026", "numberOfGuests": 1 }
+
+### V1.22 guestName 101 ky tu (NVARCHAR(100)) -> 406/2
+POST {{reservationUrl}}/api/reservations
+Content-Type: application/json
+
+{ "guestName": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", "guestEmail": "gn@example.com", "guestPhone": "0912345698", "checkInDate": "01/08/2026", "checkOutDate": "03/08/2026", "numberOfGuests": 1, "roomId": 1 }
+
+### V1.23 guestPhone 21 ky tu (NVARCHAR(20)) -> 406/2
+POST {{reservationUrl}}/api/reservations
+Content-Type: application/json
+
+{ "guestName": "Long Phone", "guestEmail": "lp@example.com", "guestPhone": "999999999999999999999", "checkInDate": "01/08/2026", "checkOutDate": "03/08/2026", "numberOfGuests": 1, "roomId": 1 }
+
+### V1.24 JSON hong -> 406/2 (khong duoc 500)
+POST {{reservationUrl}}/api/reservations
+Content-Type: application/json
+
+{ "guestName":
+
+
+### ---------- V3. GET /api/reservations/{reservationId} - Get Reservation Detail ----------
+
+### V3.1 Id ton tai -> 200/1, tra ReservationDetailDTO
+# BAY LON: phai co object "room" NESTED (lay tu RoomService), KHONG co "roomId".
+# Expect: room.roomNumber="A-101", room.capacity=2, status="CONFIRMED"
+GET {{reservationUrl}}/api/reservations/1
+
+### V3.2 Id khong ton tai -> 404/4 "Reservation is not found"
+GET {{reservationUrl}}/api/reservations/999999
+
+### V3.3 Id sai kieu -> 406/2
+GET {{reservationUrl}}/api/reservations/abc
+
+
+### ---------- V2. PUT /api/reservations/{reservationId} - Update Reservation ----------
+
+### V2.1 Partial update -> 200/1, tra ReservationDTO PHANG (co roomId), field khac giu nguyen
+PUT {{reservationUrl}}/api/reservations/1
+Content-Type: application/json
+
+{ "guestName": "Da Doi Ten" }
+
+### V2.2 Update status -> 200/1
+PUT {{reservationUrl}}/api/reservations/1
+Content-Type: application/json
+
+{ "status": "CHECKED_IN" }
+
+### V2.3 Update ngay -> 200/1 va totalAmount phai TINH LAI theo so dem moi
+# 10/09 -> 15/09 = 5 dem x 850000 = 4250000
+PUT {{reservationUrl}}/api/reservations/1
+Content-Type: application/json
+
+{ "checkInDate": "10/09/2026", "checkOutDate": "15/09/2026" }
+
+### V2.4 Id khong ton tai -> 404/4 "Reservation ID is not found"
+PUT {{reservationUrl}}/api/reservations/999999
+Content-Type: application/json
+
+{ "guestName": "X" }
+
+### V2.5 status ngoai enum -> 406/2
+PUT {{reservationUrl}}/api/reservations/1
+Content-Type: application/json
+
+{ "status": "BROKEN" }
+
+### V2.6 checkOut truoc checkIn -> 406/2 (check SAU khi merge partial)
+PUT {{reservationUrl}}/api/reservations/1
+Content-Type: application/json
+
+{ "checkInDate": "20/09/2026", "checkOutDate": "10/09/2026" }
+
+### V2.7 guestName 101 ky tu -> 406/2
+PUT {{reservationUrl}}/api/reservations/1
+Content-Type: application/json
+
+{ "guestName": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX" }
+
+### V2.8 Email sai format -> 406/2
+PUT {{reservationUrl}}/api/reservations/1
+Content-Type: application/json
+
+{ "guestEmail": "sai-email" }
+
+### V2.9 numberOfGuests = 0 -> 406/2
+PUT {{reservationUrl}}/api/reservations/1
+Content-Type: application/json
+
+{ "numberOfGuests": 0 }
+
+### V2.10 Doi sang roomId khong ton tai -> 404/4
+PUT {{reservationUrl}}/api/reservations/1
+Content-Type: application/json
+
+{ "roomId": 999999 }
+
+### V2.11 guestName chuoi rong -> 406/2
+PUT {{reservationUrl}}/api/reservations/1
+Content-Type: application/json
+
+{ "guestName": "" }
+
+### V2.12 Id sai kieu -> 406/2
+PUT {{reservationUrl}}/api/reservations/abc
+Content-Type: application/json
+
+{ "guestName": "X" }
+
+
+### ---------- V4. DELETE /api/reservations/{reservationId} - Cancel Reservation ----------
+
+### V4.1 Huy -> 200/1, data NULL, message "Reservation cancelled successfully"
+DELETE {{reservationUrl}}/api/reservations/1
+
+### V4.2 Get lai -> status = CANCELLED, row VAN CON
+GET {{reservationUrl}}/api/reservations/1
+
+### V4.3 Id khong ton tai -> 404/4
+DELETE {{reservationUrl}}/api/reservations/999999

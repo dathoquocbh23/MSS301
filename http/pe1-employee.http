@@ -1,0 +1,192 @@
+### ============================================================
+###  PE1 — EmployeeService (/api/employees) — có Feign sang Department
+###  Status map: 1=OK  2=validation  4=not found  0=500
+###  Response KHÔNG có field departmentId (write-only), chỉ có department nested.
+### ============================================================
+
+### 01. Create employee — departmentId dạng PHẲNG
+# Expect: 201, status=1, data.status="ACTIVE", data.department nested (departmentId=2), KHÔNG có field departmentId ở root
+POST {{detailUrl}}/api/employees
+Content-Type: application/json
+
+{
+  "fullName": "Pham Van Test",
+  "email": "test1@fpt.edu.vn",
+  "position": "Developer",
+  "startDate": "01/07/2026",
+  "departmentId": 2
+}
+
+### 02. Create employee — department NESTED (shape đúng spec)
+# Expect: 201, status=1
+POST {{detailUrl}}/api/employees
+Content-Type: application/json
+
+{
+  "fullName": "Nguyen Thi Nested",
+  "email": "test2@fpt.edu.vn",
+  "position": "Staff",
+  "startDate": "2026-07-15",
+  "department": { "departmentId": 3 }
+}
+
+### 03. Create — departmentId không tồn tại (Feign verify)
+# Expect: 400, status=4, "Department ID is not found"
+POST {{detailUrl}}/api/employees
+Content-Type: application/json
+
+{
+  "fullName": "Ghost Dept Employee",
+  "email": "ghost@fpt.edu.vn",
+  "position": "Manager",
+  "startDate": "01/07/2026",
+  "departmentId": 99999
+}
+
+### 04. Create — thiếu departmentId hoàn toàn
+# Expect: 400, status=2, "departmentId is required"
+POST {{detailUrl}}/api/employees
+Content-Type: application/json
+
+{
+  "fullName": "No Dept",
+  "email": "nodept@fpt.edu.vn",
+  "position": "Staff",
+  "startDate": "01/07/2026"
+}
+
+### 05. Create — thiếu startDate (NotNull)
+# Expect: 400, status=2
+POST {{detailUrl}}/api/employees
+Content-Type: application/json
+
+{
+  "fullName": "No StartDate",
+  "email": "nostart@fpt.edu.vn",
+  "position": "Staff",
+  "departmentId": 2
+}
+
+### 06. Create — position ngoài enum Manager|Developer|Staff
+# Expect: 400, status=2
+POST {{detailUrl}}/api/employees
+Content-Type: application/json
+
+{
+  "fullName": "Bad Position",
+  "email": "badpos@fpt.edu.vn",
+  "position": "Intern",
+  "startDate": "01/07/2026",
+  "departmentId": 2
+}
+
+### 07. Create — email sai format
+# Expect: 400, status=2
+POST {{detailUrl}}/api/employees
+Content-Type: application/json
+
+{
+  "fullName": "Bad Email",
+  "email": "not-an-email",
+  "position": "Staff",
+  "startDate": "01/07/2026",
+  "departmentId": 2
+}
+
+### 08. Create — startDate sai format
+# Expect: 400, status=2 ("Request body is invalid")
+POST {{detailUrl}}/api/employees
+Content-Type: application/json
+
+{
+  "fullName": "Bad Date",
+  "email": "baddate@fpt.edu.vn",
+  "position": "Staff",
+  "startDate": "July 1st 2026",
+  "departmentId": 2
+}
+
+### 09. Get detail — id có sẵn trong init_db.sql
+# Expect: 200, status=1, data.department nested, startDate dạng dd/MM/yyyy
+GET {{detailUrl}}/api/employees/1
+
+### 10. Get detail — không tồn tại
+# Expect: 400, status=4, "Employee is not found"
+GET {{detailUrl}}/api/employees/99999
+
+### 11. Update — partial: chỉ đổi position
+# Expect: 200, status=1, chỉ position đổi
+PUT {{detailUrl}}/api/employees/2
+Content-Type: application/json
+
+{
+  "position": "Manager"
+}
+
+### 12. Update — đổi phòng ban (Feign verify lại)
+# Expect: 200, status=1, data.department.departmentId=2
+PUT {{detailUrl}}/api/employees/2
+Content-Type: application/json
+
+{
+  "departmentId": 2
+}
+
+### 13. Update — sang department không tồn tại
+# Expect: 400, status=4, "Department ID is not found"
+PUT {{detailUrl}}/api/employees/2
+Content-Type: application/json
+
+{
+  "departmentId": 99999
+}
+
+### 14. Update — status ngoài enum ACTIVE|LEFT|RETIRED|INACTIVE
+# Expect: 400, status=2
+PUT {{detailUrl}}/api/employees/2
+Content-Type: application/json
+
+{
+  "status": "FIRED"
+}
+
+### 15. Update — id không tồn tại
+# Expect: 400, status=4
+PUT {{detailUrl}}/api/employees/99999
+Content-Type: application/json
+
+{
+  "fullName": "Ghost"
+}
+
+### 16. Deactivate (soft delete)
+# Expect: 200, status=1; get lại id=3 thấy status="INACTIVE"
+DELETE {{detailUrl}}/api/employees/3
+
+### 17. Deactivate — không tồn tại
+# Expect: 400, status=4
+DELETE {{detailUrl}}/api/employees/99999
+
+### 18. List — mặc định
+# Expect: 200, status=1, PageDTO; mỗi phần tử content có department nested
+GET {{detailUrl}}/api/employees
+
+### 19. List — phân trang
+# Expect: 200, size=2, page=0
+GET {{detailUrl}}/api/employees?page=0&size=2
+
+### 20. List — filter name partial
+# Expect: 200, content chỉ người có "Nguyen" trong fullName
+GET {{detailUrl}}/api/employees?name=Nguyen
+
+### 21. List — filter status
+# Expect: 200, content toàn LEFT
+GET {{detailUrl}}/api/employees?status=LEFT
+
+### 22. List — status không hợp lệ
+# Expect: 400, status=2
+GET {{detailUrl}}/api/employees?status=WRONG
+
+### 23. List — size vượt 100
+# Expect: 400, status=2
+GET {{detailUrl}}/api/employees?size=200

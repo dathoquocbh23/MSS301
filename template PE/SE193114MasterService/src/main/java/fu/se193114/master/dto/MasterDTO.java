@@ -1,10 +1,14 @@
 package fu.se193114.master.dto;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import fu.se193114.master.common.DateOnlyDeserializer;
+import fu.se193114.master.common.DateOnlySerializer;
 import fu.se193114.master.common.OnCreate;
 import fu.se193114.master.common.OnUpdate;
-import fu.se193114.master.common.ValidEffectiveDate;
+import fu.se193114.master.common.ValidDate;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
@@ -13,10 +17,6 @@ import lombok.Setter;
 
 import java.util.Date;
 
-/**
- * Validation THEO DE: message loi copy y nguyen cau chu trong de.
- * OnCreate = field bat buoc khi POST; OnUpdate = chi check format khi PUT (partial update).
- */
 @Getter
 @Setter
 @NoArgsConstructor
@@ -24,22 +24,36 @@ public class MasterDTO {
 
     private Long masterId;
 
-    @NotBlank(message = "code is required", groups = OnCreate.class)
-    @Size(max = 10, message = "code must be at most 10 characters", groups = {OnCreate.class, OnUpdate.class})
-    @Pattern(regexp = "^[A-Za-z0-9]+$", message = "code must match ^[A-Za-z0-9]+$", groups = {OnCreate.class, OnUpdate.class})
-    private String code;
-
     @NotBlank(message = "name is required", groups = OnCreate.class)
-    @Size(max = 50, message = "name must be at most 50 characters", groups = {OnCreate.class, OnUpdate.class})
+    @Size(max = 100, message = "name must be at most 100 characters", groups = {OnCreate.class, OnUpdate.class})
     private String name;
 
-    @Size(max = 100, message = "description must be at most 100 characters", groups = {OnCreate.class, OnUpdate.class})
-    private String description;
+    @NotBlank(message = "owner is required", groups = OnCreate.class)
+    @Size(max = 100, message = "owner must be at most 100 characters", groups = {OnCreate.class, OnUpdate.class})
+    private String owner;
 
-    @Pattern(regexp = "ACTIVE|INACTIVE|CLOSED", message = "status must be one of ACTIVE, INACTIVE, CLOSED", groups = OnUpdate.class)
+    private Integer priceFrom;
+
+    private Integer priceTo;
+
+    @NotBlank(message = "phone is required", groups = OnCreate.class)
+    @Size(max = 11, message = "phone must be at most 11 characters", groups = {OnCreate.class, OnUpdate.class})
+    private String phone;
+
+    @NotBlank(message = "address is required", groups = OnCreate.class)
+    @Size(max = 100, message = "address must be at most 100 characters", groups = {OnCreate.class, OnUpdate.class})
+    private String address;
+
+    @NotNull(message = "openDate is required", groups = OnCreate.class)
+    @ValidDate(groups = {OnCreate.class, OnUpdate.class})
+    @JsonSerialize(using = DateOnlySerializer.class)
+    @JsonDeserialize(using = DateOnlyDeserializer.class)
+    private Date openDate;
+
+    @Pattern(regexp = "ACTIVE|INACTIVE", message = "status must be one of ACTIVE, INACTIVE",
+            groups = {OnCreate.class, OnUpdate.class})
     private String status;
 
-    @ValidEffectiveDate(groups = {OnCreate.class, OnUpdate.class})
-    @JsonFormat(pattern = "yyyy-MM-dd")
-    private Date effectiveDate;
+    @NotNull(message = "categoryId is required", groups = OnCreate.class)
+    private Long categoryId;
 }

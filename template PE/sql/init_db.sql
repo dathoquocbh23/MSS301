@@ -1,45 +1,65 @@
--- MSS301 PE — database bootstrap TEMPLATE (thi thật DÙNG SCRIPT CỦA ĐỀ)
--- Master (phía 1) ----< Detail (phía N) — cùng 1 DB cho tiện, KHÔNG kéo FK nếu đề giả lập tách DB
+-- MSS301 PE - database TEMPLATE. THI THAT: CHAY SCRIPT CUA DE, khong chay file nay.
+-- Cau truc mo phong dung 3 bang cua de Trial (restaurants / Category / Foods)
+-- nhung dat ten theo placeholder masters / categories / details.
 IF DB_ID('MSS301_2026_PE') IS NULL
     CREATE DATABASE MSS301_2026_PE;
 GO
 USE MSS301_2026_PE;
 GO
 
-IF OBJECT_ID('details','U') IS NOT NULL DROP TABLE details;
-IF OBJECT_ID('masters','U') IS NOT NULL DROP TABLE masters;
+IF OBJECT_ID('details','U')    IS NOT NULL DROP TABLE details;
+IF OBJECT_ID('masters','U')    IS NOT NULL DROP TABLE masters;
+IF OBJECT_ID('categories','U') IS NOT NULL DROP TABLE categories;
+GO
+
+CREATE TABLE categories (
+    category_id INT IDENTITY(1,1) NOT NULL,
+    name        NVARCHAR(100)     NOT NULL,
+    CONSTRAINT PK_categories PRIMARY KEY CLUSTERED (category_id ASC),
+    CONSTRAINT UQ_categories_name UNIQUE NONCLUSTERED (name ASC)
+);
 GO
 
 CREATE TABLE masters (
-    master_id      INT IDENTITY(1,1) PRIMARY KEY,
-    name           NVARCHAR(50)  NOT NULL,
-    code           NVARCHAR(10)  NOT NULL UNIQUE,
-    effective_date DATE          NULL,
-    status         NVARCHAR(10)  NULL,
-    description    NVARCHAR(100) NULL
+    master_id   INT IDENTITY(1,1) NOT NULL,
+    address     VARCHAR(100)      NOT NULL,
+    open_date   DATETIME2(7)      NOT NULL,
+    name        VARCHAR(100)      NOT NULL,
+    owner_name  VARCHAR(100)      NOT NULL,
+    phone       VARCHAR(11)       NOT NULL,
+    price_from  INT,
+    price_to    INT,
+    status      VARCHAR(10)       NOT NULL,
+    category_id INT               NOT NULL,
+    CONSTRAINT PK_masters PRIMARY KEY CLUSTERED (master_id ASC),
+    CONSTRAINT UQ_masters_name UNIQUE NONCLUSTERED (name ASC)
 );
 GO
 
+-- De PE gia lap 2 database khac nhau -> KHONG khai bao FOREIGN KEY sang masters
 CREATE TABLE details (
-    detail_id   INT IDENTITY(1,1) PRIMARY KEY,
-    name        NVARCHAR(100) NOT NULL,
-    description NVARCHAR(100) NULL,
-    status      NVARCHAR(10)  NOT NULL,
-    start_date  DATE          NOT NULL,
-    end_date    DATE          NULL,
-    master_id   INT           NOT NULL
-    -- đề PE thường KHÔNG kéo FK vì giả lập 2 database khác nhau
+    detail_id   INT IDENTITY(1,1) NOT NULL,
+    name        NVARCHAR(100)     NOT NULL,
+    price       INT               NOT NULL,
+    ingredients NVARCHAR(500)     NOT NULL,
+    master_id   INT               NOT NULL,
+    status      NVARCHAR(20)      NOT NULL,
+    CONSTRAINT PK_details PRIMARY KEY CLUSTERED (detail_id ASC),
+    CONSTRAINT CK_details_status CHECK (status IN ('ACTIVE', 'INACTIVE'))
 );
 GO
 
-INSERT INTO masters (name, code, effective_date, status, description) VALUES
-(N'Master One',   'M01', '2024-01-01', 'ACTIVE',   N'Sample master 1'),
-(N'Master Two',   'M02', '2024-06-01', 'ACTIVE',   N'Sample master 2'),
-(N'Master Old',   'M03', '2020-03-01', 'INACTIVE', N'Sample master 3');
+INSERT INTO categories (name) VALUES (N'BBQ'), (N'Hotpot'), (N'Fast Food');
 GO
 
-INSERT INTO details (name, description, status, start_date, end_date, master_id) VALUES
-(N'Detail A', N'Sample detail A', 'ACTIVE',   '2024-01-10', NULL,         1),
-(N'Detail B', N'Sample detail B', 'ACTIVE',   '2024-05-20', NULL,         2),
-(N'Detail C', N'Sample detail C', 'INACTIVE', '2023-02-01', '2025-06-30', 2);
+INSERT INTO masters (address, open_date, name, owner_name, phone, price_from, price_to, status, category_id) VALUES
+('Hoa Lac Park', '2024-01-15', 'Master One', 'ABC Company', '02418282882', 2000, 3000, 'ACTIVE',   1),
+('Q9 Campus',    '2024-06-01', 'Master Two', 'Tran Thi B',  '0912345678',  5000, 9000, 'ACTIVE',   2),
+('Ha Noi',       '2020-03-01', 'Master Old', 'Le Van C',    '0987654321',  NULL, NULL, 'INACTIVE', 3);
+GO
+
+INSERT INTO details (name, price, ingredients, master_id, status) VALUES
+(N'Detail A', 120, N'pork, honey, garlic',  1, 'ACTIVE'),
+(N'Detail B', 350, N'beef, mushroom, tofu', 2, 'ACTIVE'),
+(N'Detail C',  90, N'chicken, flour, oil',  1, 'INACTIVE');
 GO

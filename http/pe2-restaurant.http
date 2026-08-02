@@ -1,0 +1,162 @@
+### ============================================================
+###  PE2 — RestaurantService (/api/restaurants + /api/categories)
+###  Status map: 1=OK  2=validation  3=name duplicated  4=not found  0=500
+###  Ngày: yyyy-MM-dd. Status chỉ có ACTIVE|INACTIVE. DTO owner ↔ cột owner_name.
+### ============================================================
+
+### 01. Create restaurant — hợp lệ (categoryId bắt buộc dù đề không ghi trong DTO — cột NOT NULL)
+# Expect: 201, status=1, data.status="ACTIVE"
+POST {{masterUrl}}/api/restaurants
+Content-Type: application/json
+
+{
+  "name": "Pho Xua",
+  "owner": "Dat Ho",
+  "priceFrom": 1000,
+  "priceTo": 5000,
+  "phone": "0900111222",
+  "address": "Thach That, Ha Noi",
+  "openDate": "2025-05-20",
+  "categoryId": 1
+}
+
+### 02. Create — trùng name (unique của đề Trial là NAME, không phải code)
+# Body đầy đủ các field bắt buộc để lỗi rơi ĐÚNG vào check trùng, không rơi vào validation
+# Expect: 400, status=3, "Name is duplicated"
+POST {{masterUrl}}/api/restaurants
+Content-Type: application/json
+
+{
+  "name": "BBQ Hoa Lac",
+  "owner": "Someone Else",
+  "phone": "0900333444",
+  "address": "Somewhere",
+  "openDate": "2025-01-01",
+  "categoryId": 1
+}
+
+### 03. Create — thiếu name (và chỉ thiếu name)
+# Expect: 400, status=2, "name is required"
+POST {{masterUrl}}/api/restaurants
+Content-Type: application/json
+
+{
+  "owner": "No Name Co",
+  "phone": "0900333444",
+  "address": "Somewhere",
+  "openDate": "2025-01-01",
+  "categoryId": 1
+}
+
+### 04. Create — categoryId không tồn tại (body đầy đủ, chỉ categoryId sai)
+# Expect: 400, status=2, "Category not found with id: 99999"
+# (đề không có status riêng cho category not found → validation, xem DECISIONS.md #2)
+POST {{masterUrl}}/api/restaurants
+Content-Type: application/json
+
+{
+  "name": "Ghost Category Restaurant",
+  "owner": "Ghost Co",
+  "phone": "0900555666",
+  "address": "Nowhere",
+  "openDate": "2025-01-01",
+  "categoryId": 99999
+}
+
+### 05. Create — openDate sai format (chết ngay lúc parse body)
+# Expect: 400, status=2
+POST {{masterUrl}}/api/restaurants
+Content-Type: application/json
+
+{
+  "name": "Bad Date Restaurant",
+  "owner": "X",
+  "phone": "0900777888",
+  "address": "Somewhere",
+  "openDate": "20/05/2025x",
+  "categoryId": 1
+}
+
+### 06. Get detail — id có sẵn trong init_trial_db.sql
+# Expect: 200, status=1, data.name="BBQ Hoa Lac", data.owner="ABC Company"
+GET {{masterUrl}}/api/restaurants/1
+
+### 07. Get detail — không tồn tại
+# Expect: 400 (không phải 404), status=4
+GET {{masterUrl}}/api/restaurants/99999
+
+### 08. Get detail — id sai kiểu
+# Expect: 400, status=2
+GET {{masterUrl}}/api/restaurants/abc
+
+### 09. Update — partial: chỉ đổi priceTo
+# Expect: 200, status=1, các field khác giữ nguyên
+PUT {{masterUrl}}/api/restaurants/2
+Content-Type: application/json
+
+{
+  "priceTo": 12000
+}
+
+### 10. Update — đổi name trùng nhà hàng khác
+# Expect: 400, status=3
+PUT {{masterUrl}}/api/restaurants/2
+Content-Type: application/json
+
+{
+  "name": "BBQ Hoa Lac"
+}
+
+### 11. Update — status ngoài enum ACTIVE|INACTIVE
+# Expect: 400, status=2 (PE2 KHÔNG có CLOSED)
+PUT {{masterUrl}}/api/restaurants/2
+Content-Type: application/json
+
+{
+  "status": "CLOSED"
+}
+
+### 12. Update — id không tồn tại
+# Expect: 400, status=4
+PUT {{masterUrl}}/api/restaurants/99999
+Content-Type: application/json
+
+{
+  "name": "Ghost"
+}
+
+### 13. Deactivate (soft delete)
+# Expect: 200, status=1; get lại id=3 → status="INACTIVE", row còn nguyên
+DELETE {{masterUrl}}/api/restaurants/3
+
+### 14. Deactivate — không tồn tại
+# Expect: 400, status=4
+DELETE {{masterUrl}}/api/restaurants/99999
+
+### 15. List — mặc định
+# Expect: 200, status=1, PageDTO đủ size/page/totalPages/totalElements/first/last/content
+GET {{masterUrl}}/api/restaurants
+
+### 16. List — phân trang
+# Expect: 200, size=2
+GET {{masterUrl}}/api/restaurants?page=0&size=2
+
+### 17. List — filter name partial
+# Expect: 200, content chỉ chứa nhà hàng có "BBQ"
+GET {{masterUrl}}/api/restaurants?name=BBQ
+
+### 18. List — filter ownerName partial (tên param của đề Trial!)
+# Expect: 200, content chỉ chứa owner có "Company"
+GET {{masterUrl}}/api/restaurants?ownerName=Company
+
+### 19. List — size vượt 100
+# Expect: 400, status=2
+GET {{masterUrl}}/api/restaurants?size=101
+
+### 20. Categories list — controller PHỤ (bẫy gateway route!)
+# Expect: 200, status=1, content = [{categoryId,name}...] — PHẢI chạy được ở env gateway
+GET {{masterUrl}}/api/categories
+
+### 21. Categories list — phân trang
+# Expect: 200, size=2
+GET {{masterUrl}}/api/categories?page=0&size=2

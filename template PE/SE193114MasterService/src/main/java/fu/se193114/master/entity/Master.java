@@ -14,11 +14,6 @@ import lombok.Setter;
 
 import java.util.Date;
 
-/**
- * DATABASE FIRST: @Table/@Column phai khop TUNG CHU voi script SQL cua de.
- * KHONG dung @OneToMany/@ManyToOne — 2 table gia lap khac database.
- * Cot DATE -> @Temporal(DATE); cot datetime2 -> @Temporal(TIMESTAMP).
- */
 @Entity
 @Table(name = "masters")
 @Getter
@@ -31,19 +26,31 @@ public class Master {
     @Column(name = "master_id")
     private Long masterId;
 
-    @Column(name = "name", nullable = false, length = 50)
+    @Column(name = "name", nullable = false, length = 100, unique = true)
     private String name;
 
-    @Column(name = "code", nullable = false, length = 10, unique = true)
-    private String code;
+    @Column(name = "owner_name", nullable = false, length = 100)
+    private String owner;
 
-    @Temporal(TemporalType.DATE)
-    @Column(name = "effective_date")
-    private Date effectiveDate;
+    @Column(name = "price_from")
+    private Integer priceFrom;
 
-    @Column(name = "status", length = 10)
+    @Column(name = "price_to")
+    private Integer priceTo;
+
+    @Column(name = "phone", nullable = false, length = 11)
+    private String phone;
+
+    @Column(name = "address", nullable = false, length = 100)
+    private String address;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    @Column(name = "open_date", nullable = false)
+    private Date openDate;
+
+    @Column(name = "status", nullable = false, length = 10)
     private String status;
 
-    @Column(name = "description", length = 100)
-    private String description;
+    @Column(name = "category_id", nullable = false)
+    private Long categoryId;
 }

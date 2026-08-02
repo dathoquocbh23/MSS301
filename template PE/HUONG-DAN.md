@@ -105,7 +105,8 @@ Cách B — tạo mới bằng Spring Initializr (IntelliJ: New Project → Spri
   ```
 
 Chỉnh `application.properties` mỗi project (đã có sẵn trong template):
-- password SQL Server cho khớp máy mình (template đang để `12345`),
+- template đang để đúng giá trị đề Trial yêu cầu: `sa` / `sa`. Máy mình password khác thì đổi tạm
+  để chạy, **nhớ trả về đúng đề trước khi nộp** (mục chấm 0 điểm),
 - tên database khớp đề,
 - port: 8081 Master / 8082 Detail / 8080 Gateway.
 
@@ -127,7 +128,9 @@ Started ... in x.x seconds là OK. Nếu tắt ngay → sai connection string/pa
    - KHÔNG `@OneToMany`/`@ManyToOne` (xem mục I.2). Khóa ngoại chỉ là `Long masterId`.
    - Cột DATE → `java.util.Date` + `@Temporal(TemporalType.DATE)`;
      cột datetime2 → `@Temporal(TemporalType.TIMESTAMP)`; JSON thì `@JsonFormat(pattern="yyyy-MM-dd")`.
-3. `dto/` : MasterDTO (validation theo đề), ApiResponseDTO, PageDTO.
+3. `dto/` : MasterDTO, ApiResponseDTO, PageDTO, CategoryDTO.
+   **Validation CHỈ đặt ở DTO và chỉ suy từ ràng buộc cột trong script SQL** — bảng quy đổi
+   ràng buộc → annotation nằm ở đầu file `DOI-TEN-TUNG-BUOC.md`. Service không check lại field nào.
 4. `repository/` : MasterRepository (JpaRepository + `existsByCode...` + @Query search).
 5. `service/` + `service/impl/` : CRUD + phân trang + soft-delete (đổi status
    thành INACTIVE thay vì xóa thật — đọc đề xem yêu cầu gì).
@@ -188,7 +191,7 @@ Started ... in x.x seconds là OK. Nếu tắt ngay → sai connection string/pa
    - [ ] Detail create với masterId không tồn tại → lỗi qua Feign.
    - [ ] List có phân trang + filter name/status.
    - [ ] Delete = soft delete (status→INACTIVE) nếu đề yêu cầu.
-   - [ ] Timestamp ISO 8601 trong ApiResponseDTO (nếu đề yêu cầu).
+   - [ ] ApiResponse đúng số field đề liệt kê (đề Trial chỉ có status/message/data — KHÔNG timestamp).
 
 =============================================================
 ## VII. NỘP BÀI
